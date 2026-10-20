@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Study Companion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Caveat:wght@600;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
+<link rel="stylesheet" href="core/styles.css?v=1.0.0">
+</head>
+<body>
+<div class="clockbar" id="clockbar" hidden title="Only counts while you're actively using it. Pauses after 1 minute with no taps, typing or scrolling."><div class="clockin" id="clock"></div></div>
+<div id="app" class="wrap"></div>
+
+<script src="subjects/registry.js?v=1.0.0"></script>
+<script src="core/engine.js?v=1.0.0"></script>
+<script src="core/topic.js?v=1.0.0"></script>
+<script src="core/tests.js?v=1.0.0"></script>
+<script>
+/* index.html: opening screen, child picker, subject lists and the Parent view.
+   The shared engine lives in core/. Subject content lives in subjects/. */
+(function(){
+'use strict';
+const S = window.Study, el = S.el, esc = S.esc;
+const app = el('app'), bar = el('clockbar');
+const SESSION = S.APP + ':session:child';
+const ss = {get(){ try { return sessionStorage.getItem(SESSION); } catch(e){ return null; } }, set(v){ try { v ? sessionStorage.setItem(SESSION, v) : sessionStorage.removeItem(SESSION); } catch(e){} }};
+const verFoot = `<span class="ver">v${S.APP_VERSION}</span>`;
+
+/* ---------- router ---------- */
+S.go = function(name, params){
+  params = params || {};
+  S.view = {name, params};
+  if (name === 'picker' || name === 'parent') S.setContext(null, null);
+  else if (name === 'child') S.setContext(params.child, null);
+  const needs = name === 'child' ? S.loadChild(params.child) : params.entry ? S.loadSubject(params.entry) : Promise.resolve();
+  if (params.entry && !S.defFor(params.entry)) app.innerHTML = `<p class="lede">Loading…</p>`;
+  needs.then(() => { (S.screens[name] || S.screens.picker)(params); buildClock(); window.scrollTo(0, 0); }, fail);
+};
+function fail(err){
+  app.innerHTML = `<header class="top"><h1>Something didn't load</h1><p class="lede">${esc(err && err.message || err)}. Check your connection and try again.</p></header><div><button class="btn" id="home">Back to start</button></div>`;
+  el('home').onclick = () => S.go('picker');
+  buildClock();
+}
+
+/* ---------- timer bar with Switch ---------- */
+function buildClock(){
+  const pupil = S.ctx.child && S.view && S.view.name !== 'parent' && S.view.name !== 'picker';
+  bar.hidden = !pupil;
+  if (!pupil){ el('clock').innerHTML = ''; return; }
+  const kid = S.childById(S.ctx.child);
+  el('clock').innerHTML = `<span class="who-chip">${esc(kid.name)}</span><span class="cstate" id="cs"><i></i><span id="cst">Paused</span></span><span>Today <b id="ctd">0m</b></span>${S.ctx.entry ? `<span>${esc(S.defFor(S.ctx.entry).title)} <b id="csub">0m</b></span>` : ''}<button class="switch" id="sw">Not you? Switch</button>`;
+  el('sw').onclick = () => { ss.set(null); S.go('picker'); };
+  tick(S.timing());
+}
+function tick(on){
+  if (bar.hidden || !el('cs')) return;
+  el('cs').classList.toggle('on', on);
+  el('cst').textContent = on ? 'Timing' : S.ctx.entry ? 'Paused' : 'Paused · open a subject';
+  el('ctd').textContent = S.fmtDur(S.dailyTotals(S.ctx.child).s);
+  const c = el('csub'); if (c && S.ctx.entry){ const d = S.store(S.ctx.entry).log.days[S.todayKey()]; c.textContent = S.fmtDur(d ? d.s : 0); }
+}
+S.setClockHook(tick);
+
+/* ---------- 1. Who's studying today? ---------- */
+S.screens.picker = function(){
+  app.innerHTML = `<header class="top"><span class="eyebrow">Study Companion</span><h1>Who's studying today?</h1></header>
+  <div class="who">${S.children().map(c => `<button class="kid" data-kid="${c.id}"><span class="nm">${esc(c.name)}</span><span class="sg">${esc(c.stage)}</span></button>`).join('')}</div>
+  <div class="foot"><button class="ghost" id="parent">Parent view</button>${verFoot}</div>`;
+  app.querySelectorAll('[data-kid]').forEach(b => b.onclick = () => { ss.set(b.dataset.kid); S.go('child', {child: b.dataset.kid}); });
+  el('parent').onclick = () => S.go('parent');
+};
+
+/* ---------- 2. One child's subjects ---------- */
+S.screens.child = function(params){
+  const kid = S.childById(params.child), subs = S.subjectsFor(kid.id);
+  const card = e => {
+    const def = S.defFor(e), g = S.groups(e), nx = S.nextTopic(e), lt = S.lastTest(e), st = S.store(e);
+    const rd = g.red.filter(x => S.prog(e, x.t.id).mastered).length;
+    const d = st.log.days[S.todayKey()];
+    return `<li><button class="subj" data-sub="${esc(e.subject)}"><span class="nm">${esc(def.title)} <span class="sg">· ${esc(def.level)}</span></span>
+      <span class="ln">${g.red.length ? `Red topics: ${rd} of ${g.red.length} mastered` : 'No red topics right now'}${nx ? ` · Next: ${esc(nx.t.name)}` : ''}</span>
+      <span class="ln">${lt ? `Last test ${S.scorePct(lt)}%, target ${st.tests.goal}%` : 'No tests logged yet'} · Today ${S.fmtDur(d ? d.s : 0)}</span></button></li>`;
+  };
+  app.innerHTML = `<button class="back" id="back">← Who's studying</button>
+  <header class="top"><span class="eyebrow">Hi ${esc(kid.name)}</span><h1>Your subjects</h1></header>
+  ${subs.length ? `<ol class="topics">${subs.map(card).join('')}</ol>` : `<div class="empty"><p>Nothing here yet. Your first subject is on its way.</p></div>`}
+  <div class="foot"><span>Progress is saved in this browser on this device only.</span>${verFoot}</div>`;
+  el('back').onclick = () => { ss.set(null); S.go('picker'); };
+  app.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => S.go('subject', {entry: subs.find(e => e.subject === b.dataset.sub)}));
+};
+
+/* ---------- 3. One subject's topics in priority order ---------- */
+function topicCard(entry, x, i, nextId){
+  const t = x.t, p = S.prog(entry, t.id), locked = S.isLocked(entry, x.level);
+  const status = p.mastered ? `<span class="pill done">Mastered</span>` : locked ? `<span class="pill lock">Locked</span>` : p.a ? `<span>Best streak ${p.best} of ${S.TARGET}</span>` : `<span>Not started</span>`;
+  return `<li><button class="topic ${x.level}${t.id === nextId ? ' next' : ''}" data-topic="${esc(t.id)}" ${locked ? 'disabled' : ''}>
+    <span class="no">${i + 1}</span><span class="nm">${esc(t.name)}</span><span class="bl">${esc(t.blurb || '')}</span>
+    <span class="st">${status}${S.dots(p.mastered ? S.TARGET : p.best)}</span></button></li>`;
+}
+S.screens.subject = function(params){
+  const entry = params.entry, def = S.defFor(entry), st = S.store(entry), kid = S.childById(entry.child);
+  S.setContext(entry.child, entry, 'list');
+  const g = S.groups(entry), nx = S.nextTopic(entry), open = S.ambersOpen(entry);
+  const m = a => a.filter(x => S.prog(entry, x.t.id).mastered).length;
+  const rd = m(g.red), ad = m(g.amber);
+  const lt = S.lastTest(entry), goal = st.tests.goal;
+  let planBar = '';
+  if (lt && lt.reflect && lt.reflect.minsPerWeek){
+    const from = S.addDays(S.todayKey(), -6), mins = Math.round(S.sumRange(entry, from, S.todayKey()).s / 60), plan = lt.reflect.minsPerWeek;
+    planBar = `<div class="sumbox planbar"><span class="eyebrow">Your plan after ${esc(lt.name)}</span><span>Last 7 days: <b>${mins} of ${plan} minutes</b></span><div class="bar"><span style="width:${Math.min(100, Math.round(mins / plan * 100))}%"></span></div></div>`;
+  }
+  const grp = (title, sub, arr, offset) => arr.length ? `<section class="group"><div class="ghead"><h2>${title}</h2><p>${sub}</p></div><ol class="topics">${arr.map((x, i) => topicCard(entry, x, i + offset, nx && nx.t.id)).join('')}</ol></section>` : '';
+  app.innerHTML = `<button class="back" id="back">← ${esc(kid.name)}'s subjects</button>
+  <header class="top"><span class="eyebrow">${esc(def.course)}</span><h1>${esc(def.title)}</h1><p class="lede">${esc(def.intro || '')}</p></header>
+  ${st.tests.proposal ? `<div class="hint">Your new red list from ${esc(st.tests.proposal.testName)} is waiting for your parent to approve. Keep going with this list for now.</div>` : ''}
+  <div class="summary">
+    <div class="sumbox"><span class="eyebrow">Red topics mastered</span><span class="big">${rd} of ${g.red.length}</span><div class="bar"><span style="width:${g.red.length ? rd / g.red.length * 100 : 100}%"></span></div></div>
+    <div class="sumbox"><span class="eyebrow">${lt ? 'Last test' : 'Target'}</span><span class="big">${lt ? S.scorePct(lt) + '%' : goal + '%'}</span><span>${lt ? `${esc(lt.name)} · target ${goal}%` : 'Log your next class test in My tests'}</span></div>
+  </div>
+  ${planBar}
+  ${grp('Red: fix these first', 'Do them in this order', g.red, 0)}
+  ${grp('Amber: next up', open ? (g.red.length ? 'Unlocked. Same order works well.' : 'Work through these in order') : `Unlocks when all ${g.red.length} reds are mastered`, g.amber, g.red.length)}
+  ${grp('Green: secure', 'Practise any time to keep them sharp', g.green, g.red.length + g.amber.length)}
+  <div class="foot"><button class="btn sec" id="tests">My tests</button><span>Progress is saved in this browser only.</span>${verFoot}</div>`;
+  el('back').onclick = () => S.go('child', {child: entry.child});
+  el('tests').onclick = () => S.go('tests', {entry});
+  app.querySelectorAll('[data-topic]').forEach(b => b.onclick = () => S.go('topic', {entry, topicId: b.dataset.topic}));
+};
+
+/* ---------- 4. Parent view ---------- */
+const P = {ok: false, child: null, draft: {}, confirm: null, msg: {}};
+S.screens.parent = function(){
+  const ps = S.parent();
+  if (!P.ok){
+    const set = !ps.pin;
+    app.innerHTML = `<button class="back" id="back">← Who's studying</button>
+    <header class="top"><span class="eyebrow">Parent view</span><h1>${set ? 'Set a PIN' : 'Enter your PIN'}</h1>
+      <p class="lede">${set ? 'Pick a 4-digit PIN. This covers both boys, so keep it to yourself.' : 'This screen is PIN protected.'}</p></header>
+    <div class="sumbox pinbox"><label for="p1">PIN</label><input id="p1" class="fld" type="password" inputmode="numeric" maxlength="4" autocomplete="off">
+    ${set ? `<label for="p2">Type it again</label><input id="p2" class="fld" type="password" inputmode="numeric" maxlength="4" autocomplete="off">` : ''}
+    <p class="warn" id="pw" aria-live="polite"></p><div class="actions"><button class="btn" id="pgo">${set ? 'Set PIN' : 'Open'}</button></div></div>`;
+    el('back').onclick = () => S.go('picker');
+    const go = () => {
+      const a = el('p1').value.trim();
+      if (!/^\d{4}$/.test(a)){ el('pw').textContent = 'The PIN needs to be 4 digits.'; return; }
+      if (set){ if (el('p2').value.trim() !== a){ el('pw').textContent = "Those two don't match. Try again."; return; } ps.pin = S.phash(a); S.saveParent(ps); }
+      else if (S.phash(a) !== ps.pin){ el('pw').textContent = 'Wrong PIN.'; el('p1').value = ''; return; }
+      P.ok = true; P.draft = {}; P.confirm = null;
+      Promise.all(S.children().map(c => S.loadChild(c.id))).then(renderParent, fail);
+    };
+    el('pgo').onclick = go;
+    app.querySelectorAll('.pinbox input').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); go(); } }));
+    if (window.matchMedia('(pointer:fine)').matches) el('p1').focus();
+    return;
+  }
+  Promise.all(S.children().map(c => S.loadChild(c.id))).then(renderParent, fail);
+};
+
+const dayRows = (days) => {
+  const keys = Object.keys(days).filter(k => days[k].s > 0 || days[k].q > 0).sort().reverse();
+  return keys.length ? keys.map(k => { const d = days[k]; return `<tr><td>${S.fmtDate(k)}</td><td>${S.fmtDur(d.s)}</td><td>${d.q}</td><td>${S.pct(d.c, d.q)}</td><td class="${S.lowRate(d.q, d.s) ? 'flag' : ''}">${S.perTen(d.q, d.s)}</td><td>${d.h}</td></tr>`; }).join('')
+    : `<tr><td colspan="6">Nothing logged yet.</td></tr>`;
+};
+const dayHead = `<thead><tr><th>Day</th><th>Active</th><th>Answered</th><th>Right</th><th>Per 10 min</th><th>Shown</th></tr></thead>`;
+
+function draftFor(entry){
+  const id = entry.child + ':' + entry.subject, st = S.store(entry);
+  if (!P.draft[id]){
+    const pr = st.tests.proposal;
+    if (pr) P.draft[id] = {order: pr.order.slice(), levels: Object.assign({}, pr.levels), reopen: (pr.reopen || []).slice(), proposal: true};
+    else { const L = S.topicList(entry); const lv = {}; L.forEach(x => lv[x.t.id] = x.level); P.draft[id] = {order: L.map(x => x.t.id), levels: lv, reopen: [], proposal: false}; }
+  }
+  const d = P.draft[id];
+  d.order = S.buildOrder(entry, d.levels, d.order);
+  return d;
+}
+
+function subjectBlock(entry){
+  const def = S.defFor(entry), st = S.store(entry), sid = entry.child + ':' + entry.subject;
+  const L = S.topicList(entry), byId = {}; L.forEach(x => byId[x.t.id] = x);
+  const topicT = {}, topicQ = {};
+  Object.values(st.log.days).forEach(d => { Object.entries(d.t || {}).forEach(([k, s]) => topicT[k] = (topicT[k] || 0) + s); Object.entries(d.tq || {}).forEach(([k, v]) => { const o = topicQ[k] = topicQ[k] || {q: 0, c: 0}; o.q += v.q; o.c += v.c; }); });
+  const trows = L.map(x => { const p = S.prog(entry, x.t.id); return `<tr><td>${esc(x.t.name)}</td><td><span class="pill ${x.level}">${x.level}</span></td><td>${S.fmtDur(topicT[x.t.id] || 0)}</td><td>${p.c} of ${p.a}</td><td>${p.mastered ? 'Mastered' + (p.masteredOn ? ' ' + S.fmtDate(p.masteredOn) : '') : 'Best streak ' + p.best}</td></tr>`; }).join('');
+  const tests = S.testsSorted(entry).reverse();
+  const tlist = tests.length ? tests.map(t => { const ev = t.evidence || {}, r = t.reflect || {}, sp = S.scorePct(t);
+    return `<details class="tst"><summary>${S.fmtDateY(t.date)} · ${esc(t.name)} · ${esc(t.score)}/${esc(t.outOf)} (${sp}%) <span class="${sp >= st.tests.goal ? 'ok' : 'flag'}">${sp >= st.tests.goal ? 'hit target' : (st.tests.goal - sp) + ' short'}</span></summary>
+      <p>Study before it: ${S.fmtDur(ev.s)}, ${ev.q || 0} questions, ${S.pct(ev.c, ev.q)} right, ${ev.mastered || 0} topics mastered (${ev.from ? S.fmtDate(ev.from) : ''} to ${ev.to ? S.fmtDate(ev.to) : ''}, about ${ev.minsPerWeek || 0} min a week).</p>
+      ${ev.prev && ev.prev.planMins != null ? `<p>He'd planned ${esc(ev.prev.planMins)} min a week after ${esc(ev.prev.name)}.</p>` : ''}
+      <p><b>Why:</b> ${esc(r.why)}</p><p><b>Will do differently:</b> ${esc(r.diff)}</p><p><b>New plan:</b> ${esc(r.minsPerWeek)} min a week</p>
+      <p class="note">Topics: ${Object.entries(t.marks || {}).filter(([, v]) => v !== 'na').map(([k, v]) => `${esc(byId[k] ? byId[k].t.name : k)} (${{most: 'lost most', some: 'lost some', fine: 'fine'}[v]})`).join(', ') || 'none marked'}</p></details>`; }).join('')
+    : `<p class="note">No tests logged yet.</p>`;
+
+  const d = draftFor(entry);
+  const reopenList = S.willReopen(entry, d.order, d.levels, d.reopen);
+  const editor = `<ol class="order">${d.order.map((id, i) => { const lv = d.levels[id], prevSame = i > 0 && d.levels[d.order[i - 1]] === lv, nextSame = i < d.order.length - 1 && d.levels[d.order[i + 1]] === lv;
+    return `<li><span class="no" style="color:var(--${lv === 'red' ? 'redpen' : lv === 'amber' ? 'amber' : 'green'})">${i + 1}</span><span class="nm">${esc(byId[id].t.name)}</span><span class="mv">
+      <select data-lv="${esc(id)}" aria-label="Level for ${esc(byId[id].t.name)}">${S.LEVELS.map(l => `<option value="${l}" ${l === lv ? 'selected' : ''}>${l}</option>`).join('')}</select>
+      <button class="ghost" data-up="${i}" ${prevSame ? '' : 'disabled'} aria-label="Move up">↑</button><button class="ghost" data-dn="${i}" ${nextSame ? '' : 'disabled'} aria-label="Move down">↓</button></span></li>`; }).join('')}</ol>
+    ${reopenList.length ? `<p class="note">Will re-open (mastery reset): ${reopenList.map(id => esc(byId[id].t.name)).join(', ')}.</p>` : ''}
+    <div class="actions">${d.proposal ? `<button class="btn" data-approve="${esc(sid)}">Approve this list</button><button class="btn sec" data-reject="${esc(sid)}">Reject suggestion</button>` : `<button class="btn" data-approve="${esc(sid)}">Save list</button>`}</div>`;
+
+  const cf = P.confirm, msg = P.msg[sid] || '';
+  return `<section class="psub" data-sid="${esc(sid)}"><h2>${esc(def.title)} · ${esc(def.level)}</h2>
+    <p class="note">Tracking on this device since ${S.fmtDateY(st.log.since)}.</p>
+    ${st.tests.proposal ? `<div class="prop"><b>New red list suggested after ${esc(st.tests.proposal.testName)}.</b><span>Check it in Topic priorities below, change anything you disagree with, then approve or reject.</span></div>` : ''}
+    <div class="group"><h3>Day by day</h3><div class="tblwrap"><table>${dayHead}<tbody>${dayRows(st.log.days)}</tbody></table></div></div>
+    <div class="group"><h3>By topic</h3><div class="tblwrap"><table><thead><tr><th>Topic</th><th>Level</th><th>Time</th><th>Right</th><th>Status</th></tr></thead><tbody>${trows}</tbody></table></div></div>
+    <div class="group"><h3>Tests and reflections</h3>${tlist}</div>
+    <div class="group"><h3>Topic priorities${d.proposal ? ' (his suggestion)' : ''}</h3><p class="note">Reds come first in this order. Ambers stay locked until every red is mastered.</p>${editor}</div>
+    <div class="group"><h3>Settings</h3>
+      <div class="setrow"><label for="goal-${esc(sid)}">Target (B+) %</label><input id="goal-${esc(sid)}" class="fld" inputmode="numeric" value="${st.tests.goal}"><button class="ghost" data-goal="${esc(sid)}">Save target</button></div>
+      <div class="setrow"><span>Ambers: ${st.progress.unlock ? 'unlocked by you' : S.redsDone(entry) ? 'open, all reds mastered' : 'locked until reds are mastered'}</span><button class="ghost" data-unlock="${esc(sid)}">${st.progress.unlock ? 'Lock again' : 'Unlock now'}</button></div>
+      <div class="setrow">${cf === 'reset:' + sid ? `<span>Wipe all topic progress for ${esc(def.title)}?</span><button class="ghost danger" data-yes="reset:${esc(sid)}">Yes, reset</button><button class="ghost" data-no="1">Cancel</button>` : `<button class="ghost" data-ask="reset:${esc(sid)}">Reset topic progress</button>`}
+      ${cf === 'clear:' + sid ? `<span>Delete the whole ${esc(def.title)} log?</span><button class="ghost danger" data-yes="clear:${esc(sid)}">Yes, delete it</button><button class="ghost" data-no="1">Cancel</button>` : `<button class="ghost" data-ask="clear:${esc(sid)}">Clear activity log</button>`}</div>
+      ${msg ? `<p class="ok">${esc(msg)}</p>` : ''}
+    </div></section>`;
+}
+
+function renderParent(){
+  const kids = S.children();
+  if (!P.child) P.child = kids[0].id;
+  const kid = S.childById(P.child), subs = S.subjectsFor(kid.id);
+  const tk = S.todayKey(), wk = S.rangeTotals(kid.id, S.addDays(tk, -6), tk), td = S.dailyTotals(kid.id), all = S.rangeTotals(kid.id, '0000-00-00', '9999-12-31');
+  const combined = {};
+  subs.forEach(e => Object.entries(S.store(e).log.days).forEach(([k, d]) => { const c = combined[k] = combined[k] || {s: 0, q: 0, c: 0, h: 0}; c.s += d.s; c.q += d.q; c.c += d.c; c.h += d.h; }));
+  app.innerHTML = `<button class="back" id="back">← Who's studying</button>
+  <header class="top"><span class="eyebrow">Parent view</span><h1>Activity</h1></header>
+  <div class="ptabs" role="tablist">${kids.map(c => `<button class="tab" role="tab" data-pc="${c.id}" aria-selected="${c.id === kid.id}">${esc(c.name)}</button>`).join('')}</div>
+  ${subs.length ? `<div class="summary">
+    <div class="sumbox"><span class="eyebrow">Today</span><span class="big">${S.fmtDur(td.s)}</span><span>${td.q} questions · ${S.pct(td.c, td.q)} right</span></div>
+    <div class="sumbox"><span class="eyebrow">Last 7 days</span><span class="big">${S.fmtDur(wk.s)}</span><span>${wk.q} questions · ${S.pct(wk.c, wk.q)} right · ${wk.h} answers shown</span></div>
+  </div>
+  <p class="note">All subjects since ${S.fmtDateY(S.childSince(kid.id))}: ${S.fmtDur(all.s)}, ${all.q} questions, ${S.pct(all.c, all.q)} right.</p>
+  ${subs.length > 1 ? `<section class="group"><h2>Day by day, all subjects</h2><div class="tblwrap"><table>${dayHead}<tbody>${dayRows(combined)}</tbody></table></div></section>` : ''}
+  ${subs.map(subjectBlock).join('')}` : `<div class="empty"><p>No subjects set up for ${esc(kid.name)} yet.</p></div>`}
+  <section class="group"><h2>How to read this</h2><ul class="howto">
+    <li>Time only counts while a subject is open on screen and he's tapping, typing or scrolling. It stops 1 minute after the last action. Opening the link and walking away counts nothing.</li>
+    <li>Watch <b>Per 10 min</b>. Steady practice is roughly 3 to 8 questions. Under 1 over a session of 10 minutes or more is flagged, since it means lots of time and not much work.</li>
+    <li><b>Shown</b> is how often he pressed Show me how instead of trying. A few is fine. Lots means he's skipping the thinking.</li>
+    <li>If a "tracking since" date jumps forward, the browser's data has been cleared. Clearing browser data resets progress and the log.</li>
+    <li>Progress is per device and per browser. A session on the phone won't show on the laptop.</li>
+    <li>The PIN keeps casual eyes out. It isn't bank-grade security, and someone determined with browser tools could edit the stored data.</li></ul></section>
+  <div class="foot"><button class="ghost" id="lock">Lock</button><button class="ghost" id="cpin">Change PIN</button>${verFoot}</div>`;
+
+  P.msg = {};   // confirmation messages show once
+  const rerender = () => { const y = window.scrollY; renderParent(); window.scrollTo(0, y); };
+  const entryOf = sid => subs.find(e => e.child + ':' + e.subject === sid);
+  el('back').onclick = () => { P.ok = false; S.go('picker'); };
+  el('lock').onclick = () => { P.ok = false; S.go('picker'); };
+  el('cpin').onclick = () => { const ps = S.parent(); ps.pin = null; S.saveParent(ps); P.ok = false; S.go('parent'); };
+  app.querySelectorAll('[data-pc]').forEach(b => b.onclick = () => { P.child = b.dataset.pc; P.confirm = null; renderParent(); });
+  app.querySelectorAll('.psub').forEach(sec => {
+    const sid = sec.dataset.sid, entry = entryOf(sid), d = draftFor(entry);
+    sec.querySelectorAll('[data-lv]').forEach(s => s.onchange = () => { d.levels[s.dataset.lv] = s.value; rerender(); });
+    sec.querySelectorAll('[data-up]').forEach(b => b.onclick = () => { const i = +b.dataset.up; [d.order[i - 1], d.order[i]] = [d.order[i], d.order[i - 1]]; rerender(); });
+    sec.querySelectorAll('[data-dn]').forEach(b => b.onclick = () => { const i = +b.dataset.dn; [d.order[i + 1], d.order[i]] = [d.order[i], d.order[i + 1]]; rerender(); });
+    sec.querySelectorAll('[data-approve]').forEach(b => b.onclick = () => { S.applyPlan(entry, S.buildOrder(entry, d.levels, d.order), d.levels, d.reopen); delete P.draft[sid]; P.msg[sid] = 'Topic list saved.'; rerender(); });
+    sec.querySelectorAll('[data-reject]').forEach(b => b.onclick = () => { S.rejectProposal(entry); delete P.draft[sid]; P.msg[sid] = 'Suggestion rejected. His current list stays.'; rerender(); });
+    sec.querySelectorAll('[data-goal]').forEach(b => b.onclick = () => { const v = +el('goal-' + sid).value; if (!(v >= 1 && v <= 100)){ P.msg[sid] = ''; el('goal-' + sid).classList.add('wrong'); return; } const st = S.store(entry); st.tests.goal = Math.round(v); st.save('tests'); P.msg[sid] = 'Target saved.'; rerender(); });
+    sec.querySelectorAll('[data-unlock]').forEach(b => b.onclick = () => { const st = S.store(entry); st.progress.unlock = !st.progress.unlock; st.save('progress'); rerender(); });
+    sec.querySelectorAll('[data-ask]').forEach(b => b.onclick = () => { P.confirm = b.dataset.ask; rerender(); });
+    sec.querySelectorAll('[data-no]').forEach(b => b.onclick = () => { P.confirm = null; rerender(); });
+    sec.querySelectorAll('[data-yes]').forEach(b => b.onclick = () => { const [act] = b.dataset.yes.split(':'); if (act === 'reset') S.resetProgress(entry); else S.clearLog(entry); P.confirm = null; P.msg[sid] = act === 'reset' ? 'Topic progress reset.' : 'Log cleared.'; rerender(); });
+  });
+}
+
+/* ---------- start ---------- */
+const remembered = ss.get();
+if (remembered && S.childById(remembered)) S.go('child', {child: remembered}); else S.go('picker');
+})();
+</script>
+</body>
+</html>
