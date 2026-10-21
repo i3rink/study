@@ -73,13 +73,23 @@ function answerHTML(q){
   return `<div class="ansrow m">${q.template.replace(/\{(\d)\}/g, (m, i) => `<input id="f${i}" class="fld" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" aria-label="Box ${+i + 1}">`)}</div>${q.note ? `<p class="note">${q.note}</p>` : ''}`;
 }
 
+/* Mark a multiple choice answer, or lock the input boxes. */
+function lock(q){
+  if (q.kind === 'mc'){
+    document.querySelectorAll('input[name="mc"]').forEach(i => i.disabled = true);
+    const c = el('opt' + q.correct); if (c) c.classList.add('right');
+    const s = document.querySelector('input[name="mc"]:checked'); if (s && +s.value !== q.correct) el('opt' + s.value).classList.add('wrong');
+  } else el('ans').querySelectorAll('input.fld').forEach(i => i.disabled = true);
+}
+S.qui = {answerHTML: q => answerHTML(q), grade: q => grade(q), lock, parseNum};
+
 function renderPractise(entry, item){
   const t = item.t, p = S.prog(entry, t.id);
   if (S.isLocked(entry, item.level)){
     el('panel').innerHTML = `<div class="prac"><div class="hint">This topic unlocks once every red topic is mastered.</div></div>`;
     return;
   }
-  if (!V.q){ V.q = t.gen(); V.qn++; V.answered = false; }
+  if (!V.q){ V.q = t.gen(); V.qn++; V.answered = false; V.hinted = false; }
   const q = V.q;
   el('panel').innerHTML = `<div class="prac">
     <div class="streakbar" id="streak">${streakHTML(p)}</div>
@@ -96,7 +106,7 @@ function renderPractise(entry, item){
       <div id="fb" aria-live="polite"></div>
     </article></div>`;
   el('check').onclick = () => submit(entry, item, false);
-  el('hint').onclick = () => { el('hintBox').innerHTML = `<div class="hint">${q.hint}</div>`; };
+  el('hint').onclick = () => { V.hinted = true; el('hintBox').innerHTML = `<div class="hint">${q.hint}</div>${S.game ? `<p class="note">Using a hint halves the XP for this question.</p>` : ''}`; };
   el('show').onclick = () => submit(entry, item, true);
   el('ans').querySelectorAll('input.fld').forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); V.answered ? next(entry, item) : submit(entry, item, false); } }));
   const f = el('f0'); if (f && window.matchMedia('(pointer:fine)').matches) f.focus();
@@ -123,14 +133,11 @@ function submit(entry, item, reveal){
   }
   el('warn').textContent = '';
   V.answered = true;
-  const wasRedsDone = S.redsDone(entry);
+  const wasRedsDone = S.redsDone(entry), wasMastered = S.prog(entry, t.id).mastered;
   const res = S.recordAnswer(entry, t.id, ok, reveal);
+  const gm = S.game ? S.game.onAnswer(entry, t.id, {ok, reveal, hinted: V.hinted, mode: 'practice', wasMastered, newlyMastered: res.newlyMastered}) : null;
   const p = S.prog(entry, t.id);
-  if (q.kind === 'mc'){
-    document.querySelectorAll('input[name="mc"]').forEach(i => i.disabled = true);
-    el('opt' + q.correct).classList.add('right');
-    const s = document.querySelector('input[name="mc"]:checked'); if (s && +s.value !== q.correct) el('opt' + s.value).classList.add('wrong');
-  } else el('ans').querySelectorAll('input.fld').forEach(i => i.disabled = true);
+  lock(q);
   el('streak').innerHTML = streakHTML(p);
   let extra = '';
   if (res.newlyMastered){
@@ -138,11 +145,12 @@ function submit(entry, item, reveal){
     extra = `<div class="banner">${S.TARGET} in a row. ${esc(t.name)} is mastered.${unlocked ? ' That was the last red. The amber topics are now unlocked.' : ''}</div>`;
   }
   el('fb').innerHTML = `<div class="fb">
-    <span class="mark">${ok ? '✓ Spot on' : reveal ? 'Here’s how' : '✗ Not quite'}</span>
+    <span class="markrow"><span class="mark">${ok ? '✓ Spot on' : reveal ? 'Here’s how' : '✗ Not quite'}</span>${S.game ? S.game.xpTag(gm) : ''}</span>
     ${ok ? '' : `<p class="ans">Answer: ${q.answerText}</p>`}
     <ol>${q.working.map(w => `<li>${w}</li>`).join('')}</ol>
     ${!ok ? `<p class="note">${reveal ? 'Showing the answer counts as a miss, so your streak resets.' : 'Streak reset.'} Read the working, then have another go.</p>` : ''}
-    ${extra}</div>`;
+    ${ok && wasMastered && S.game ? `<p class="note">You've mastered this one, so it earns less XP. Question of the day and boss rounds are where mastered topics pay out.</p>` : ''}
+    ${extra}${S.game ? S.game.bannersHTML(gm) : ''}</div>`;
   el('acts').innerHTML = `<button class="btn" id="next">Next question</button>${res.newlyMastered ? `<button class="btn sec" id="home">Back to topics</button>` : ''}`;
   el('next').onclick = () => next(entry, item);
   const h = el('home'); if (h) h.onclick = () => { V.id = null; S.go('subject', {entry}); };

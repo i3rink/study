@@ -7,16 +7,17 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Caveat:wght@600;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
-<link rel="stylesheet" href="core/styles.css?v=1.0.0">
+<link rel="stylesheet" href="core/styles.css?v=1.1.0">
 </head>
 <body>
 <div class="clockbar" id="clockbar" hidden title="Only counts while you're actively using it. Pauses after 1 minute with no taps, typing or scrolling."><div class="clockin" id="clock"></div></div>
 <div id="app" class="wrap"></div>
 
-<script src="subjects/registry.js?v=1.0.0"></script>
-<script src="core/engine.js?v=1.0.0"></script>
-<script src="core/topic.js?v=1.0.0"></script>
-<script src="core/tests.js?v=1.0.0"></script>
+<script src="subjects/registry.js?v=1.1.0"></script>
+<script src="core/engine.js?v=1.1.0"></script>
+<script src="core/topic.js?v=1.1.0"></script>
+<script src="core/tests.js?v=1.1.0"></script>
+<script src="core/game.js?v=1.1.0"></script>
 <script>
 /* index.html: opening screen, child picker, subject lists and the Parent view.
    The shared engine lives in core/. Subject content lives in subjects/. */
@@ -34,7 +35,7 @@ S.go = function(name, params){
   S.view = {name, params};
   if (name === 'picker' || name === 'parent') S.setContext(null, null);
   else if (name === 'child') S.setContext(params.child, null);
-  const needs = name === 'child' ? S.loadChild(params.child) : params.entry ? S.loadSubject(params.entry) : Promise.resolve();
+  const needs = name === 'child' || name === 'qotd' ? S.loadChild(params.child) : params.entry ? S.loadSubject(params.entry) : Promise.resolve();
   if (params.entry && !S.defFor(params.entry)) app.innerHTML = `<p class="lede">Loading…</p>`;
   needs.then(() => { (S.screens[name] || S.screens.picker)(params); buildClock(); window.scrollTo(0, 0); }, fail);
 };
@@ -50,7 +51,7 @@ function buildClock(){
   bar.hidden = !pupil;
   if (!pupil){ el('clock').innerHTML = ''; return; }
   const kid = S.childById(S.ctx.child);
-  el('clock').innerHTML = `<span class="who-chip">${esc(kid.name)}</span><span class="cstate" id="cs"><i></i><span id="cst">Paused</span></span><span>Today <b id="ctd">0m</b></span>${S.ctx.entry ? `<span>${esc(S.defFor(S.ctx.entry).title)} <b id="csub">0m</b></span>` : ''}<button class="switch" id="sw">Not you? Switch</button>`;
+  el('clock').innerHTML = `<span class="who-chip">${esc(kid.name)}</span><span class="lvchip" id="lvc"></span><span class="cstate" id="cs"><i></i><span id="cst">Paused</span></span><span>Today <b id="ctd">0m</b></span>${S.ctx.entry ? `<span>${esc(S.defFor(S.ctx.entry).title)} <b id="csub">0m</b></span>` : ''}<button class="switch" id="sw">Not you? Switch</button>`;
   el('sw').onclick = () => { ss.set(null); S.go('picker'); };
   tick(S.timing());
 }
@@ -59,6 +60,7 @@ function tick(on){
   el('cs').classList.toggle('on', on);
   el('cst').textContent = on ? 'Timing' : S.ctx.entry ? 'Paused' : 'Paused · open a subject';
   el('ctd').textContent = S.fmtDur(S.dailyTotals(S.ctx.child).s);
+  const lv = el('lvc'); if (lv && S.game){ const g = S.game.G(S.ctx.child); lv.textContent = 'Level ' + S.game.levelOf(g.xp).level + ' · ' + g.xp.toLocaleString('en-GB') + ' XP'; }
   const c = el('csub'); if (c && S.ctx.entry){ const d = S.store(S.ctx.entry).log.days[S.todayKey()]; c.textContent = S.fmtDur(d ? d.s : 0); }
 }
 S.setClockHook(tick);
@@ -85,10 +87,12 @@ S.screens.child = function(params){
   };
   app.innerHTML = `<button class="back" id="back">← Who's studying</button>
   <header class="top"><span class="eyebrow">Hi ${esc(kid.name)}</span><h1>Your subjects</h1></header>
+  ${S.game ? S.game.panelHTML(kid.id) : ''}
   ${subs.length ? `<ol class="topics">${subs.map(card).join('')}</ol>` : `<div class="empty"><p>Nothing here yet. Your first subject is on its way.</p></div>`}
   <div class="foot"><span>Progress is saved in this browser on this device only.</span>${verFoot}</div>`;
   el('back').onclick = () => { ss.set(null); S.go('picker'); };
   app.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => S.go('subject', {entry: subs.find(e => e.subject === b.dataset.sub)}));
+  const qb = el('qotd'); if (qb) qb.onclick = () => S.go('qotd', {child: kid.id});
 };
 
 /* ---------- 3. One subject's topics in priority order ---------- */
@@ -123,9 +127,11 @@ S.screens.subject = function(params){
   ${grp('Red: fix these first', 'Do them in this order', g.red, 0)}
   ${grp('Amber: next up', open ? (g.red.length ? 'Unlocked. Same order works well.' : 'Work through these in order') : `Unlocks when all ${g.red.length} reds are mastered`, g.amber, g.red.length)}
   ${grp('Green: secure', 'Practise any time to keep them sharp', g.green, g.red.length + g.amber.length)}
+  ${S.game ? S.game.bossCardHTML(entry) : ''}
   <div class="foot"><button class="btn sec" id="tests">My tests</button><span>Progress is saved in this browser only.</span>${verFoot}</div>`;
   el('back').onclick = () => S.go('child', {child: entry.child});
   el('tests').onclick = () => S.go('tests', {entry});
+  const bg = el('bossGo'); if (bg) bg.onclick = () => S.go('boss', {entry});
   app.querySelectorAll('[data-topic]').forEach(b => b.onclick = () => S.go('topic', {entry, topicId: b.dataset.topic}));
 };
 
@@ -218,6 +224,21 @@ function subjectBlock(entry){
     </div></section>`;
 }
 
+function gameBlock(kid){
+  const G = S.game, m = G.summary(kid.id);
+  const days = Object.keys(m.days).sort().reverse().slice(0, 14);
+  const bossRows = S.subjectsFor(kid.id).map(e => { const b = m.boss[e.subject]; if (!b || !b.rounds.length) return ''; const r = b.rounds[b.rounds.length - 1];
+    return `<tr><td>${esc(S.defFor(e).title)}</td><td>${b.rounds.length}</td><td>${b.best.score}/${G.BOSS_LEN} in ${G.fmtClock(b.best.secs)}</td><td>${r.score}/${G.BOSS_LEN}, ${S.fmtDate(r.date)}</td></tr>`; }).join('');
+  const qd = m.qotd;
+  return `<section class="group"><h2>Game</h2><div class="summary">
+    <div class="sumbox"><span class="eyebrow">Level ${m.L.level}</span><span class="big">${m.xp.toLocaleString('en-GB')} XP</span><span>${m.today} today · ${m.week} in the last 7 days</span></div>
+    <div class="sumbox"><span class="eyebrow">Streak</span><span class="big">${m.s.n} day${m.s.n === 1 ? '' : 's'}</span><span>Best ${m.s.best} · free miss ${m.s.freeUsed ? 'used' : 'available'} this week</span></div></div>
+    <p class="note">Question of the day: ${qd ? (qd.done ? (qd.ok ? 'answered, right' : 'answered, wrong') : 'opened, not answered') : m.qotdReady ? 'not opened yet today' : 'locked until he masters a topic'}.</p>
+    ${days.length ? `<div class="tblwrap"><table><thead><tr><th>Day</th><th>XP earned</th></tr></thead><tbody>${days.map(k => `<tr><td>${S.fmtDate(k)}</td><td>${m.days[k]}</td></tr>`).join('')}</tbody></table></div>` : ''}
+    ${bossRows ? `<div class="tblwrap"><table><thead><tr><th>Boss rounds</th><th>Played</th><th>Best</th><th>Last</th></tr></thead><tbody>${bossRows}</tbody></table></div>` : ''}
+    ${G.badgesHTML(G.G(kid.id))}
+    <div class="setrow">${P.confirm === 'game:' + kid.id ? `<span>Wipe ${esc(kid.name)}'s XP, best streak and badges?</span><button class="ghost danger" id="gYes">Yes, reset</button><button class="ghost" id="gNo">Cancel</button>` : `<button class="ghost" id="gAsk">Reset XP and badges</button>`}</div></section>`;
+}
 function renderParent(){
   const kids = S.children();
   if (!P.child) P.child = kids[0].id;
@@ -230,9 +251,10 @@ function renderParent(){
   <div class="ptabs" role="tablist">${kids.map(c => `<button class="tab" role="tab" data-pc="${c.id}" aria-selected="${c.id === kid.id}">${esc(c.name)}</button>`).join('')}</div>
   ${subs.length ? `<div class="summary">
     <div class="sumbox"><span class="eyebrow">Today</span><span class="big">${S.fmtDur(td.s)}</span><span>${td.q} questions · ${S.pct(td.c, td.q)} right</span></div>
-    <div class="sumbox"><span class="eyebrow">Last 7 days</span><span class="big">${S.fmtDur(wk.s)}</span><span>${wk.q} questions · ${S.pct(wk.c, wk.q)} right · ${wk.h} answers shown</span></div>
+    <div class="sumbox"><span class="eyebrow">Last 7 days</span><span class="big">${S.fmtDur(wk.s)}</span><span>${wk.q} questions · ${S.pct(wk.c, wk.q)} right · ${wk.h} answer${wk.h === 1 ? "" : "s"} shown</span></div>
   </div>
   <p class="note">All subjects since ${S.fmtDateY(S.childSince(kid.id))}: ${S.fmtDur(all.s)}, ${all.q} questions, ${S.pct(all.c, all.q)} right.</p>
+  ${S.game ? gameBlock(kid) : ''}
   ${subs.length > 1 ? `<section class="group"><h2>Day by day, all subjects</h2><div class="tblwrap"><table>${dayHead}<tbody>${dayRows(combined)}</tbody></table></div></section>` : ''}
   ${subs.map(subjectBlock).join('')}` : `<div class="empty"><p>No subjects set up for ${esc(kid.name)} yet.</p></div>`}
   <section class="group"><h2>How to read this</h2><ul class="howto">
@@ -241,6 +263,9 @@ function renderParent(){
     <li><b>Shown</b> is how often he pressed Show me how instead of trying. A few is fine. Lots means he's skipping the thinking.</li>
     <li>If a "tracking since" date jumps forward, the browser's data has been cleared. Clearing browser data resets progress and the log.</li>
     <li>Progress is per device and per browser. A session on the phone won't show on the laptop.</li>
+    <li><b>XP</b> only comes from correct work: 10 for a right answer, 5 with a hint, nothing for Show me how, and just 2 on topics he's already mastered. 50 for mastering a topic, 75 for re-mastering one a test flagged. Question of the day is double. Boss rounds give 15 a question, for the first 2 rounds a day in each subject.</li>
+    <li><b>Streak</b> days need at least ${S.game ? S.game.STREAK_Q : 10} questions at ${S.game ? S.game.STREAK_PCT : 60}% or better, across all his subjects. One missed day a week is forgiven.</li>
+    <li>XP is logged per day, ready for PlayStation time once you set the rule.</li>
     <li>The PIN keeps casual eyes out. It isn't bank-grade security, and someone determined with browser tools could edit the stored data.</li></ul></section>
   <div class="foot"><button class="ghost" id="lock">Lock</button><button class="ghost" id="cpin">Change PIN</button>${verFoot}</div>`;
 
@@ -249,6 +274,9 @@ function renderParent(){
   const entryOf = sid => subs.find(e => e.child + ':' + e.subject === sid);
   el('back').onclick = () => { P.ok = false; S.go('picker'); };
   el('lock').onclick = () => { P.ok = false; S.go('picker'); };
+  const ga = el('gAsk'); if (ga) ga.onclick = () => { P.confirm = 'game:' + kid.id; rerender(); };
+  const gy = el('gYes'); if (gy) gy.onclick = () => { S.game.reset(kid.id); P.confirm = null; rerender(); };
+  const gn = el('gNo'); if (gn) gn.onclick = () => { P.confirm = null; rerender(); };
   el('cpin').onclick = () => { const ps = S.parent(); ps.pin = null; S.saveParent(ps); P.ok = false; S.go('parent'); };
   app.querySelectorAll('[data-pc]').forEach(b => b.onclick = () => { P.child = b.dataset.pc; P.confirm = null; renderParent(); });
   app.querySelectorAll('.psub').forEach(sec => {

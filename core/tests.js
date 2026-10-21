@@ -150,12 +150,13 @@ function step3(entry, def, head){
   el('app').querySelectorAll('[data-up]').forEach(b => b.onclick = () => swap(+b.dataset.up, +b.dataset.up - 1));
   el('app').querySelectorAll('[data-dn]').forEach(b => b.onclick = () => swap(+b.dataset.dn, +b.dataset.dn + 1));
   el('pv').onclick = () => { W.step = 2; renderWizard(entry); };
-  el('sv').onclick = () => { S.saveTest(entry, r); W.step = 4; renderWizard(entry); window.scrollTo(0, 0); };
+  el('sv').onclick = () => { S.saveTest(entry, r); W.game = S.game ? S.game.onTest(entry, r) : null; W.step = 4; renderWizard(entry); window.scrollTo(0, 0); };
 }
 
 function done(entry, def){
   el('app').innerHTML = `<header class="top"><span class="eyebrow">Saved</span><h1>Test logged</h1>
     <p class="lede">Your new red list has gone to your parent to approve. Until then you'll keep working on your current list.</p></header>
+    ${S.game ? S.game.bannersHTML(W.game) : ''}
     <div class="actions"><button class="btn" id="tl">Back to ${esc(def.title)}</button><button class="btn sec" id="ml">My tests</button></div>`;
   el('tl').onclick = () => { W.step = 0; S.go('subject', {entry}); };
   el('ml').onclick = () => { W.step = 0; S.go('tests', {entry}); };

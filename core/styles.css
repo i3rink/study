@@ -244,3 +244,48 @@ details.tst[open]{display:flex; flex-direction:column; gap:6px}
 .pill.green{background:var(--green-soft); color:var(--green)}
 .topic.green .no{color:var(--green)}
 @media (max-width:480px){ol.order li{grid-template-columns:auto minmax(0,1fr)} ol.order .mv{grid-column:2}}
+
+/* ---------- v1.1.0: column vectors, vector arrows, rate tables (shared by any maths subject) ---------- */
+.colv{display:inline-flex; flex-direction:column; align-items:center; vertical-align:middle; padding:.05em .4em; margin:0 .15em; border-left:1.6px solid currentColor; border-right:1.6px solid currentColor; border-radius:.7em; line-height:1.3}
+.colv .fld{margin:3px 0}
+.ansrow .colv{line-height:1.2}
+.arw{display:inline-block; position:relative; padding-top:.3em}
+.arw::before{content:""; position:absolute; left:0; right:2px; top:.12em; border-top:1.4px solid currentColor}
+.arw::after{content:""; position:absolute; right:-1px; top:calc(.12em - 3px); border:3.5px solid transparent; border-left:6px solid currentColor; border-right:0}
+.sheet .rates{max-width:340px}
+.sheet .rates td,.sheet .rates th{padding:6px 10px}
+.tight{display:inline-flex; flex-wrap:wrap; align-items:center; gap:4px 2px}
+.tight .fld{width:3.4em; padding:7px 4px}
+.tight .term{display:inline-flex; align-items:center; gap:3px; white-space:nowrap; margin-right:4px}
+
+/* ---------- v1.1.0: game ---------- */
+.game{display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px}
+@media (max-width:420px){.game{grid-template-columns:1fr}}
+.game small{color:var(--ink-2); font-size:.85rem}
+.lvchip{font-size:.8rem; font-weight:700; color:var(--blue); background:var(--blue-soft); border-radius:99px; padding:2px 9px}
+.lvchip:empty{display:none}
+.qotd,.boss{width:100%; text-align:left; display:flex; flex-direction:column; gap:4px; border-radius:6px; padding:14px 16px; border:2px solid var(--blue); background:var(--blue-soft); color:var(--ink)}
+.qotd b,.boss b{font-family:var(--f-display); font-size:1.15rem}
+.qotd span,.boss span{color:var(--ink-2)}
+.boss{border-color:var(--redpen); background:var(--red-soft)}
+.boss small{color:var(--redpen); font-weight:700}
+.qotd.off,.boss.off{border-style:dashed; border-color:var(--line); background:var(--sheet)}
+button.qotd:hover,button.boss:hover{filter:brightness(1.03); transform:translateY(-1px)}
+.xp{display:inline-block; font-weight:800; font-size:.9rem; color:var(--blue); background:var(--blue-soft); border-radius:99px; padding:3px 10px; font-family:var(--f-display)}
+.markrow{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.bdgwrap summary{cursor:pointer; font-weight:700}
+.bdgwrap[open] summary{margin-bottom:10px}
+.badges{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:8px}
+.bdg{display:flex; flex-direction:column; gap:2px; border:1.5px dashed var(--line); border-radius:6px; padding:8px 10px; color:var(--ink-2); background:var(--sheet)}
+.bdg small{font-size:.78rem}
+.bdg.on{border-style:solid; border-color:var(--amber); color:var(--ink); background:var(--amber-soft)}
+.bdg.on b{color:var(--amber)}
+.banner.bdg-win{background:var(--amber-soft); color:var(--amber)}
+.bossbar{display:flex; gap:12px; align-items:center; flex-wrap:wrap; background:var(--sheet); border:1px solid var(--line); border-radius:4px; padding:10px 14px; font-variant-numeric:tabular-nums}
+.bclock{margin-left:auto; font-family:var(--f-display); font-weight:800; font-size:1.3rem}
+ol.review{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:8px}
+ol.review>li{background:var(--sheet); border:1px solid var(--line); border-left:4px solid var(--line); border-radius:4px; padding:10px 14px; overflow-x:auto}
+ol.review>li.r-ok{border-left-color:var(--green)} ol.review>li.r-bad{border-left-color:var(--redpen)}
+ol.review>li.r-ok summary{color:var(--green)} ol.review>li.r-bad summary{color:var(--redpen)}
+ol.review summary{cursor:pointer; font-weight:700}
+ol.review ol{padding-left:1.4em}

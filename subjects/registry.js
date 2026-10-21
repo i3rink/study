@@ -9,6 +9,7 @@ window.STUDY_REGISTRY = {
     { id: 'evan', name: 'Evan', stage: 'S3' }
   ],
   subjects: [
-    { child: 'ben', subject: 'maths-n5', file: 'subjects/ben-maths-n5.js', name: 'Maths', level: 'National 5' }
+    { child: 'ben',  subject: 'maths-n5', file: 'subjects/ben-maths-n5.js',  name: 'Maths', level: 'National 5' },
+    { child: 'evan', subject: 'maths-s3', file: 'subjects/evan-maths-s3.js', name: 'Maths', level: 'S3' }
   ]
 };

@@ -6,7 +6,7 @@
 'use strict';
 
 const APP = 'studyapp';
-const APP_VERSION = '1.0.0';   // must match the footer and the commit message
+const APP_VERSION = '1.1.0';   // must match the footer and the commit message
 const TARGET = 5;              // correct in a row to master a topic
 const IDLE_MS = 60000;         // timer stops 1 minute after the last action
 const DEFAULT_GOAL = 65;       // % placeholder for B+, parent can change per subject
