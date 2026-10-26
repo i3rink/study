@@ -5,7 +5,11 @@
      mc     { options:[html], correct:index }
      num    { answer, tol, rel?, pre?, post?, im? }
      fields { template:'html with {0} {1}', fields:[{answer, tol}] }
-   Every question also has prompt, hint, working:[html], answerText, and optional calc, note, diagram. */
+   Every question also has prompt, hint, working:[html], answerText, and optional calc, note, diagram.
+   A num question can list alt:[{answer, tol, note}] for other answers that also count, e.g. using 3.14 for π.
+   Set plain:true on an mc question for ordinary text options (not maths type), e.g. Business.
+   A topic can also have written:[{q, marks, points:[...], model}] for the Exam practice tab.
+   Written answers are self-marked, so they never count towards mastery, streaks or % right. */
 (function(){
 'use strict';
 const S = window.Study, el = S.el, esc = S.esc;
@@ -29,7 +33,8 @@ const V = {};   // view state for the open topic
 S.screens.topic = function(params){
   const entry = params.entry, item = S.topicList(entry).find(x => x.t.id === params.topicId);
   if (!item){ S.go('subject', {entry}); return; }
-  if (V.id !== item.t.id){ V.id = item.t.id; V.tab = S.prog(entry, item.t.id).a ? 'practise' : 'learn'; V.q = null; V.qn = 0; V.answered = false; }
+  if (V.id !== item.t.id){ V.id = item.t.id; V.tab = S.prog(entry, item.t.id).a ? 'practise' : 'learn'; V.q = null; V.qn = 0; V.answered = false; V.w = null; V.wn = 0; V.wseen = []; }
+  if (V.tab === 'write' && !(item.t.written && item.t.written.length)) V.tab = 'practise';
   if (params.tab) V.tab = params.tab;
   S.setContext(entry.child, entry, item.t.id);
   render(entry, item);
@@ -44,11 +49,13 @@ function render(entry, item){
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" id="tab-learn" aria-selected="${V.tab === 'learn'}">Learn</button>
     <button class="tab" role="tab" id="tab-prac" aria-selected="${V.tab === 'practise'}">Practise</button>
+    ${t.written && t.written.length ? `<button class="tab" role="tab" id="tab-write" aria-selected="${V.tab === 'write'}">Exam practice</button>` : ''}
   </div><div id="panel"></div>`;
   el('back').onclick = () => { V.id = null; S.go('subject', {entry}); };
   el('tab-learn').onclick = () => { V.tab = 'learn'; render(entry, item); };
   el('tab-prac').onclick = () => { V.tab = 'practise'; render(entry, item); };
-  if (V.tab === 'learn') renderLearn(entry, item); else renderPractise(entry, item);
+  const tw = el('tab-write'); if (tw) tw.onclick = () => { V.tab = 'write'; render(entry, item); };
+  if (V.tab === 'learn') renderLearn(entry, item); else if (V.tab === 'write') renderWrite(entry, item); else renderPractise(entry, item);
 }
 
 function renderLearn(entry, item){
@@ -60,7 +67,7 @@ function renderLearn(entry, item){
     ${L.steps ? `<div class="blk"><h3>How to do it</h3><ol>${L.steps.map(s => `<li>${s}</li>`).join('')}</ol></div>` : ''}
     ${L.ex ? `<div class="blk"><h3>Worked example</h3><div class="example"><p>${L.ex.q}</p>${L.ex.lines.map(l => `<p class="ln">${l}</p>`).join('')}</div></div>` : ''}
     ${L.traps ? `<div class="blk"><h3>Where marks go missing</h3><ul class="traps">${L.traps.map(s => `<li>${s}</li>`).join('')}</ul></div>` : ''}
-    ${L.exam ? `<p class="exam">In the exam: ${L.exam}</p>` : ''}
+    ${L.exam ? `<p class="exam">${esc(L.examLabel || 'In the exam')}: ${L.exam}</p>` : ''}
     <div><button class="btn" id="go">Start practising</button></div></div>`;
   el('go').onclick = () => { V.tab = 'practise'; render(entry, item); window.scrollTo(0, 0); };
 }
@@ -68,7 +75,7 @@ function renderLearn(entry, item){
 const streakHTML = p => `${dots(p.streak)}<span class="meta">Streak ${p.streak} · Best ${p.best} · ${p.c} of ${p.a} right</span>`;
 
 function answerHTML(q){
-  if (q.kind === 'mc') return `<fieldset class="mc"><legend class="sr">Choose an answer</legend>${q.options.map((o, i) => `<label class="opt" id="opt${i}"><input type="radio" name="mc" id="mc${i}" value="${i}"><span class="m">${o}</span></label>`).join('')}</fieldset>`;
+  if (q.kind === 'mc') return `<fieldset class="mc${q.plain ? ' plain' : ''}"><legend class="sr">Choose an answer</legend>${q.options.map((o, i) => `<label class="opt" id="opt${i}"><input type="radio" name="mc" id="mc${i}" value="${i}"><span class="${q.plain ? 'ot' : 'm'}">${o}</span></label>`).join('')}</fieldset>`;
   if (q.kind === 'num') return `<div class="ansrow"><label for="f0" class="sr">Your answer</label>${q.pre ? `<span class="affix">${q.pre}</span>` : ''}<input id="f0" class="fld wide" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="${q.im || 'decimal'}" placeholder="Your answer">${q.post ? `<span class="affix">${q.post}</span>` : ''}</div>${q.note ? `<p class="note">${q.note}</p>` : ''}`;
   return `<div class="ansrow m">${q.template.replace(/\{(\d)\}/g, (m, i) => `<input id="f${i}" class="fld" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" aria-label="Box ${+i + 1}">`)}</div>${q.note ? `<p class="note">${q.note}</p>` : ''}`;
 }
@@ -81,7 +88,7 @@ function lock(q){
     const s = document.querySelector('input[name="mc"]:checked'); if (s && +s.value !== q.correct) el('opt' + s.value).classList.add('wrong');
   } else el('ans').querySelectorAll('input.fld').forEach(i => i.disabled = true);
 }
-S.qui = {answerHTML: q => answerHTML(q), grade: q => grade(q), lock, parseNum};
+S.qui = {answerHTML: q => answerHTML(q), grade: q => grade(q), lock, parseNum, slipHTML: () => slipHTML()};
 
 function renderPractise(entry, item){
   const t = item.t, p = S.prog(entry, t.id);
@@ -112,20 +119,31 @@ function renderPractise(entry, item){
   const f = el('f0'); if (f && window.matchMedia('(pointer:fine)').matches) f.focus();
 }
 
+/* signSlip is set when a wrong answer would be right with the opposite sign, e.g. 1 instead of -1. */
+let signSlip = false, altNote = '';
+const flipped = (x, a, tol, rel) => a !== 0 && close(-x, a, tol, rel);
 function grade(q){
+  signSlip = false; altNote = '';
   if (q.kind === 'mc'){ const s = document.querySelector('input[name="mc"]:checked'); if (!s) return null; return +s.value === q.correct; }
-  if (q.kind === 'num'){ const x = parseNum(el('f0').value); if (isNaN(x)) return null; const ok = close(x, q.answer, q.tol, q.rel); el('f0').classList.add(ok ? 'right' : 'wrong'); return ok; }
+  if (q.kind === 'num'){
+    const x = parseNum(el('f0').value); if (isNaN(x)) return null;
+    let ok = close(x, q.answer, q.tol, q.rel);
+    if (!ok && q.alt){ const a = q.alt.find(a => close(x, a.answer, a.tol)); if (a){ ok = true; altNote = a.note || ''; } }
+    el('f0').classList.add(ok ? 'right' : 'wrong'); if (!ok && flipped(x, q.answer, q.tol, q.rel)) signSlip = true; return ok;
+  }
   const vals = q.fields.map((f, i) => parseNum(el('f' + i).value));
   if (vals.some(isNaN)) return null;
   let all = true;
-  q.fields.forEach((f, i) => { const ok = close(vals[i], f.answer, f.tol); el('f' + i).classList.add(ok ? 'right' : 'wrong'); if (!ok) all = false; });
+  q.fields.forEach((f, i) => { const ok = close(vals[i], f.answer, f.tol); el('f' + i).classList.add(ok ? 'right' : 'wrong'); if (!ok){ all = false; if (flipped(vals[i], f.answer, f.tol)) signSlip = true; } });
   return all;
 }
+const slipHTML = () => signSlip ? `<p class="slip">Right number, wrong sign. If the term is negative, type the minus sign in the box, even when there's a + in front of it.</p>` : '';
 
 function submit(entry, item, reveal){
   if (V.answered) return;
   const t = item.t, q = V.q;
   let ok = false;
+  signSlip = false;
   if (!reveal){
     const g = grade(q);
     if (g === null){ el('warn').textContent = q.kind === 'mc' ? 'Pick an answer first.' : 'Type a number in every box first.'; return; }
@@ -146,7 +164,7 @@ function submit(entry, item, reveal){
   }
   el('fb').innerHTML = `<div class="fb">
     <span class="markrow"><span class="mark">${ok ? '✓ Spot on' : reveal ? 'Here’s how' : '✗ Not quite'}</span>${S.game ? S.game.xpTag(gm) : ''}</span>
-    ${ok ? '' : `<p class="ans">Answer: ${q.answerText}</p>`}
+    ${ok ? (altNote ? `<p class="note">${altNote}</p>` : '') : `<p class="ans">Answer: ${q.answerText}</p>`}${ok || reveal ? '' : slipHTML()}
     <ol>${q.working.map(w => `<li>${w}</li>`).join('')}</ol>
     ${!ok ? `<p class="note">${reveal ? 'Showing the answer counts as a miss, so your streak resets.' : 'Streak reset.'} Read the working, then have another go.</p>` : ''}
     ${ok && wasMastered && S.game ? `<p class="note">You've mastered this one, so it earns less XP. Question of the day and boss rounds are where mastered topics pay out.</p>` : ''}
@@ -157,4 +175,59 @@ function submit(entry, item, reveal){
   el('next').focus({preventScroll: true});
 }
 function next(entry, item){ V.q = null; renderPractise(entry, item); }
+
+/* ---------- Exam practice: written answers, self-marked ----------
+   He writes first, then sees the marking points and ticks the ones he made.
+   Logged apart from checked answers. Never changes mastery, streaks or % right. */
+const MIN_WRITE = 15;
+function pickWritten(t){
+  const n = t.written.length, seen = V.wseen.slice(-Math.max(0, n - 1));
+  const pool = t.written.map((w, i) => i).filter(i => !seen.includes(i));
+  const i = pool[Math.floor(Math.random() * pool.length)];
+  V.wseen.push(i);
+  return t.written[i];
+}
+function renderWrite(entry, item){
+  const t = item.t;
+  if (S.isLocked(entry, item.level)){ el('panel').innerHTML = `<div class="prac"><div class="hint">This topic unlocks once every red topic is mastered.</div></div>`; return; }
+  if (!V.w){ V.w = {q: pickWritten(t), stage: 'write', text: ''}; V.wn++; }
+  const w = V.w, q = w.q;
+  const head = `<article class="sheet"><span class="qno">W${V.wn}</span><div class="qtop"><span class="calc">Written · ${q.marks} mark${q.marks === 1 ? '' : 's'}</span></div><p class="qtext">${q.q}</p>`;
+  if (w.stage === 'write'){
+    el('panel').innerHTML = `<div class="prac"><p class="note">Write your answer the way you would in the test. Then check it against the marking points and mark it yourself. Be honest, it's only you it helps.</p>
+      ${head}<label class="sr" for="wans">Your answer</label><textarea id="wans" class="fld area" maxlength="800" placeholder="Your answer">${esc(w.text)}</textarea>
+      <p class="warn" id="warn" aria-live="polite"></p>
+      <div class="actions"><button class="btn" id="wchk">Check my answer</button><button class="btn sec" id="wdk">I don't know</button></div></article></div>`;
+    el('wchk').onclick = () => { const v = el('wans').value.trim(); if (v.length < MIN_WRITE){ el('warn').textContent = 'Write a full sentence first.'; return; } w.text = v; w.stage = 'mark'; renderWrite(entry, item); };
+    el('wdk').onclick = () => { w.text = ''; w.gaveUp = true; w.stage = 'done'; save(entry, t, w, 0); renderWrite(entry, item); };
+    if (window.matchMedia('(pointer:fine)').matches) el('wans').focus();
+    return;
+  }
+  const points = `<ul class="mpts">${q.points.map((pt, i) => `<li><label><input type="checkbox" data-pt="${i}" ${w.stage === 'done' ? 'disabled' : ''} ${w.ticked && w.ticked.includes(i) ? 'checked' : ''}><span>${pt}</span></label></li>`).join('')}</ul>`;
+  const yours = w.text ? `<div class="yours"><span class="eyebrow">Your answer</span><p>${esc(w.text)}</p></div>` : '';
+  if (w.stage === 'mark'){
+    el('panel').innerHTML = `<div class="prac">${head}${yours}
+      <div class="blk"><h3>Marking points</h3><p class="note">Tick each point your answer actually makes. 1 mark each, up to ${q.marks}. Saying it in your own words is fine.</p>${points}</div>
+      <div class="model"><span class="eyebrow">A full-marks answer</span><p>${q.model}</p></div>
+      <div class="actions"><button class="btn" id="wsave">Save my mark</button></div></article></div>`;
+    el('wsave').onclick = () => {
+      w.ticked = [...el('panel').querySelectorAll('[data-pt]:checked')].map(c => +c.dataset.pt);
+      w.stage = 'done'; save(entry, t, w, Math.min(q.marks, w.ticked.length)); renderWrite(entry, item);
+    };
+    return;
+  }
+  el('panel').innerHTML = `<div class="prac">${head}${yours}
+    <div class="fb"><span class="markrow"><span class="mark">${w.gaveUp ? 'Here’s how' : `${w.got} out of ${q.marks}`}</span>${S.game ? S.game.xpTag(w.gm) : ''}</span>
+    ${w.gaveUp ? `<div class="blk"><h3>Marking points</h3><ul class="mpts">${q.points.map(pt => `<li>${pt}</li>`).join('')}</ul></div>` : points}
+    <div class="model"><span class="eyebrow">A full-marks answer</span><p>${q.model}</p></div>
+    <p class="note">Self-marked. It shows in the Parent view with your answer, but it doesn't count towards mastery.</p>
+    ${S.game ? S.game.bannersHTML(w.gm) : ''}</div>
+    <div class="actions"><button class="btn" id="wnext">Next question</button></div></article></div>`;
+  el('wnext').onclick = () => { V.w = null; renderWrite(entry, item); window.scrollTo(0, 0); };
+}
+function save(entry, t, w, got){
+  w.got = got;
+  S.recordWritten(entry, t.id, {q: w.q.q, marks: w.q.marks, answer: w.text, got, of: w.q.marks, gaveUp: !!w.gaveUp});
+  w.gm = S.game ? S.game.onWritten(entry, !!w.gaveUp) : null;
+}
 })();

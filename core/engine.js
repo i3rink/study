@@ -6,7 +6,7 @@
 'use strict';
 
 const APP = 'studyapp';
-const APP_VERSION = '1.1.0';   // must match the footer and the commit message
+const APP_VERSION = '1.2.0';   // must match the footer and the commit message
 const TARGET = 5;              // correct in a row to master a topic
 const IDLE_MS = 60000;         // timer stops 1 minute after the last action
 const DEFAULT_GOAL = 65;       // % placeholder for B+, parent can change per subject
@@ -31,7 +31,7 @@ const perTen = (q,s) => s >= 120 ? (q/(s/600)).toFixed(1) : '-';
 const lowRate = (q,s) => s >= 600 && q/(s/600) < 1;
 
 /* ---------- storage ----------
-   Every key is studyapp:<child>:<subject>:<part>, so nothing clashes with the
+   Every key is studyapp:<child>:<subject>:<part> (parts: progress, log, tests, plan, written), so nothing clashes with the
    other child or with other apps on the same GitHub Pages address.
    The parent PIN covers both children, so it lives at studyapp:parent:settings. */
 const key = (child, subject, part) => [APP, child, subject, part].join(':');
@@ -50,8 +50,10 @@ function store(entry){
     log:      read(k('log'), null)      || {since: todayKey(), days:{}},
     tests:    read(k('tests'), null)    || {goal: DEFAULT_GOAL, list:[], proposal:null},
     plan:     read(k('plan'), null),
+    written:  read(k('written'), null)  || {list:[]},
     save(part){ write(k(part), s[part]); }
   };
+  if (!Array.isArray(s.written.list)) s.written.list = [];
   if (!s.progress.p) s.progress.p = {};
   if (!s.log.days) s.log.days = {};
   if (!s.log.since) s.log.since = todayKey();
@@ -81,7 +83,7 @@ function loadSubject(entry){
     document.head.appendChild(sc);
   });
 }
-const loadChild = child => Promise.all(subjectsFor(child).map(loadSubject));
+const loadChild = child => Promise.all(subjectsFor(child).map(loadSubject).concat(window.Study && window.Study.plan ? [window.Study.plan.load(child)] : []));
 
 /* ---------- topics, priorities and mastery ---------- */
 function topicList(entry){
@@ -119,6 +121,15 @@ function recordAnswer(entry, topicId, ok, revealed){
   st.save('log');
   return {newlyMastered: !was && p.mastered};
 }
+/* A written answer the pupil marked himself. Kept apart from checked answers:
+   it never changes mastery, streaks, questions answered or percentage right. */
+function recordWritten(entry, topicId, rec){
+  const st = store(entry), d = day(entry);
+  d.w = (d.w || 0) + 1; d.wm = (d.wm || 0) + (rec.got || 0); d.wo = (d.wo || 0) + (rec.of || 0);
+  st.written.list.push(Object.assign({date: todayKey(), at: Date.now(), topic: topicId}, rec));
+  if (st.written.list.length > 300) st.written.list.shift();
+  st.save('written'); st.save('log');
+}
 
 /* ---------- active-use timer ----------
    Counts only while a subject is open, the page is on screen, and there has been
@@ -144,7 +155,7 @@ function sumRange(entry, from, to){
   Object.keys(D).forEach(k => { if (k >= from && k <= to){ const d = D[k]; r.s += d.s; r.q += d.q; r.c += d.c; r.h += d.h; } });
   return r;
 }
-/* One child's totals for a day across all his subjects. PlayStation time will read this. */
+/* One child's totals for a day across all his subjects (tracked time only, never the focus timer). */
 function dailyTotals(child, k){
   k = k || todayKey();
   return subjectsFor(child).reduce((a, e) => { const d = store(e).log.days[k]; if (d){ a.s += d.s; a.q += d.q; a.c += d.c; a.h += d.h; } return a; }, {s:0, q:0, c:0, h:0});
@@ -229,13 +240,13 @@ function parent(){ return read(PARENT_KEY, null) || {pin: null}; }
 function saveParent(p){ write(PARENT_KEY, p); }
 const phash = s => { let h = 5381; for (const ch of APP + ':' + s) h = ((h << 5) + h + ch.charCodeAt(0)) | 0; return String(h >>> 0); };
 function resetProgress(entry){ const st = store(entry); st.progress = {p:{}, unlock:false}; st.save('progress'); }
-function clearLog(entry){ const st = store(entry); st.log = {since: todayKey(), days:{}}; st.save('log'); }
+function clearLog(entry){ const st = store(entry); st.log = {since: todayKey(), days:{}}; st.save('log'); st.written = {list:[]}; st.save('written'); }
 
 window.Study = {
   APP, APP_VERSION, TARGET, IDLE_MS, DEFAULT_GOAL, LEVELS,
   esc, el, dkey, todayKey, addDays, daysBetween, fmtDur, fmtDate, fmtDateY, pct, perTen, lowRate,
   key, store, children, childById, subjectsFor, registerSubject, defFor, loadSubject, loadChild,
-  topicList, prog, groups, redsDone, ambersOpen, isLocked, nextTopic, day, recordAnswer,
+  topicList, prog, groups, redsDone, ambersOpen, isLocked, nextTopic, day, recordAnswer, recordWritten,
   ctx, setContext, timing, setClockHook: fn => { clockHook = fn; },
   sumRange, dailyTotals, rangeTotals, childSince,
   testsSorted, lastTest, scorePct, evidenceFor, proposedLevels, defaultRedOrder, buildOrder, saveTest, applyPlan, rejectProposal, willReopen,

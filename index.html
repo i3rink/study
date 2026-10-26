@@ -7,17 +7,18 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Caveat:wght@600;700&family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&display=swap">
-<link rel="stylesheet" href="core/styles.css?v=1.1.0">
+<link rel="stylesheet" href="core/styles.css?v=1.2.0">
 </head>
 <body>
 <div class="clockbar" id="clockbar" hidden title="Only counts while you're actively using it. Pauses after 1 minute with no taps, typing or scrolling."><div class="clockin" id="clock"></div></div>
 <div id="app" class="wrap"></div>
 
-<script src="subjects/registry.js?v=1.1.0"></script>
-<script src="core/engine.js?v=1.1.0"></script>
-<script src="core/topic.js?v=1.1.0"></script>
-<script src="core/tests.js?v=1.1.0"></script>
-<script src="core/game.js?v=1.1.0"></script>
+<script src="subjects/registry.js?v=1.2.0"></script>
+<script src="core/engine.js?v=1.2.0"></script>
+<script src="core/topic.js?v=1.2.0"></script>
+<script src="core/tests.js?v=1.2.0"></script>
+<script src="core/game.js?v=1.2.0"></script>
+<script src="core/plan.js?v=1.2.0"></script>
 <script>
 /* index.html: opening screen, child picker, subject lists and the Parent view.
    The shared engine lives in core/. Subject content lives in subjects/. */
@@ -34,8 +35,8 @@ S.go = function(name, params){
   params = params || {};
   S.view = {name, params};
   if (name === 'picker' || name === 'parent') S.setContext(null, null);
-  else if (name === 'child') S.setContext(params.child, null);
-  const needs = name === 'child' || name === 'qotd' ? S.loadChild(params.child) : params.entry ? S.loadSubject(params.entry) : Promise.resolve();
+  else if (name === 'child' || name === 'plan' || name === 'focus') S.setContext(params.child, null);
+  const needs = name === 'child' || name === 'qotd' || name === 'plan' || name === 'focus' ? S.loadChild(params.child) : params.entry ? S.loadSubject(params.entry) : Promise.resolve();
   if (params.entry && !S.defFor(params.entry)) app.innerHTML = `<p class="lede">Loading…</p>`;
   needs.then(() => { (S.screens[name] || S.screens.picker)(params); buildClock(); window.scrollTo(0, 0); }, fail);
 };
@@ -58,7 +59,7 @@ function buildClock(){
 function tick(on){
   if (bar.hidden || !el('cs')) return;
   el('cs').classList.toggle('on', on);
-  el('cst').textContent = on ? 'Timing' : S.ctx.entry ? 'Paused' : 'Paused · open a subject';
+  el('cst').textContent = on ? 'Timing' : S.ctx.entry ? 'Paused' : S.view && S.view.name === 'focus' ? 'Not timing here · focus timer below' : 'Paused · open a subject';
   el('ctd').textContent = S.fmtDur(S.dailyTotals(S.ctx.child).s);
   const lv = el('lvc'); if (lv && S.game){ const g = S.game.G(S.ctx.child); lv.textContent = 'Level ' + S.game.levelOf(g.xp).level + ' · ' + g.xp.toLocaleString('en-GB') + ' XP'; }
   const c = el('csub'); if (c && S.ctx.entry){ const d = S.store(S.ctx.entry).log.days[S.todayKey()]; c.textContent = S.fmtDur(d ? d.s : 0); }
@@ -87,12 +88,14 @@ S.screens.child = function(params){
   };
   app.innerHTML = `<button class="back" id="back">← Who's studying</button>
   <header class="top"><span class="eyebrow">Hi ${esc(kid.name)}</span><h1>Your subjects</h1></header>
+  ${S.plan ? S.plan.cardHTML(kid.id) : ''}
   ${S.game ? S.game.panelHTML(kid.id) : ''}
   ${subs.length ? `<ol class="topics">${subs.map(card).join('')}</ol>` : `<div class="empty"><p>Nothing here yet. Your first subject is on its way.</p></div>`}
   <div class="foot"><span>Progress is saved in this browser on this device only.</span>${verFoot}</div>`;
   el('back').onclick = () => { ss.set(null); S.go('picker'); };
   app.querySelectorAll('[data-sub]').forEach(b => b.onclick = () => S.go('subject', {entry: subs.find(e => e.subject === b.dataset.sub)}));
   const qb = el('qotd'); if (qb) qb.onclick = () => S.go('qotd', {child: kid.id});
+  if (S.plan) S.plan.wire(kid.id);
 };
 
 /* ---------- 3. One subject's topics in priority order ---------- */
@@ -165,11 +168,11 @@ S.screens.parent = function(){
 };
 
 const dayRows = (days) => {
-  const keys = Object.keys(days).filter(k => days[k].s > 0 || days[k].q > 0).sort().reverse();
-  return keys.length ? keys.map(k => { const d = days[k]; return `<tr><td>${S.fmtDate(k)}</td><td>${S.fmtDur(d.s)}</td><td>${d.q}</td><td>${S.pct(d.c, d.q)}</td><td class="${S.lowRate(d.q, d.s) ? 'flag' : ''}">${S.perTen(d.q, d.s)}</td><td>${d.h}</td></tr>`; }).join('')
-    : `<tr><td colspan="6">Nothing logged yet.</td></tr>`;
+  const keys = Object.keys(days).filter(k => days[k].s > 0 || days[k].q > 0 || days[k].w > 0).sort().reverse();
+  return keys.length ? keys.map(k => { const d = days[k]; return `<tr><td>${S.fmtDate(k)}</td><td>${S.fmtDur(d.s)}</td><td>${d.q}</td><td>${S.pct(d.c, d.q)}</td><td class="${S.lowRate(d.q, d.s) ? 'flag' : ''}">${S.perTen(d.q, d.s)}</td><td>${d.h}</td><td>${d.w ? `${d.w} (${d.wm}/${d.wo})` : '-'}</td></tr>`; }).join('')
+    : `<tr><td colspan="7">Nothing logged yet.</td></tr>`;
 };
-const dayHead = `<thead><tr><th>Day</th><th>Active</th><th>Answered</th><th>Right</th><th>Per 10 min</th><th>Shown</th></tr></thead>`;
+const dayHead = `<thead><tr><th>Day</th><th>Active</th><th>Answered</th><th>Right</th><th>Per 10 min</th><th>Shown</th><th>Written</th></tr></thead>`;
 
 function draftFor(entry){
   const id = entry.child + ':' + entry.subject, st = S.store(entry);
@@ -198,6 +201,9 @@ function subjectBlock(entry){
       <p class="note">Topics: ${Object.entries(t.marks || {}).filter(([, v]) => v !== 'na').map(([k, v]) => `${esc(byId[k] ? byId[k].t.name : k)} (${{most: 'lost most', some: 'lost some', fine: 'fine'}[v]})`).join(', ') || 'none marked'}</p></details>`; }).join('')
     : `<p class="note">No tests logged yet.</p>`;
 
+  const wr = st.written.list.slice().reverse().slice(0, 30);
+  const wlist = wr.length ? `<div class="group"><h3>Written answers (self-marked)</h3><p class="note">He wrote these, then ticked the marking points himself. Read a few to check his marking is honest. Latest 30 shown.</p>
+    ${wr.map(w => `<details class="tst"><summary>${S.fmtDate(w.date)} · ${esc(byId[w.topic] ? byId[w.topic].t.name : w.topic)} · ${w.gaveUp ? '<span class="flag">I don\'t know</span>' : `${w.got}/${w.of}`}</summary><p><b>Question:</b> ${w.q}</p><p><b>His answer:</b> ${w.gaveUp ? '<i>None, pressed I don\'t know</i>' : esc(w.answer)}</p></details>`).join('')}</div>` : '';
   const d = draftFor(entry);
   const reopenList = S.willReopen(entry, d.order, d.levels, d.reopen);
   const editor = `<ol class="order">${d.order.map((id, i) => { const lv = d.levels[id], prevSame = i > 0 && d.levels[d.order[i - 1]] === lv, nextSame = i < d.order.length - 1 && d.levels[d.order[i + 1]] === lv;
@@ -213,6 +219,7 @@ function subjectBlock(entry){
     ${st.tests.proposal ? `<div class="prop"><b>New red list suggested after ${esc(st.tests.proposal.testName)}.</b><span>Check it in Topic priorities below, change anything you disagree with, then approve or reject.</span></div>` : ''}
     <div class="group"><h3>Day by day</h3><div class="tblwrap"><table>${dayHead}<tbody>${dayRows(st.log.days)}</tbody></table></div></div>
     <div class="group"><h3>By topic</h3><div class="tblwrap"><table><thead><tr><th>Topic</th><th>Level</th><th>Time</th><th>Right</th><th>Status</th></tr></thead><tbody>${trows}</tbody></table></div></div>
+    ${wlist}
     <div class="group"><h3>Tests and reflections</h3>${tlist}</div>
     <div class="group"><h3>Topic priorities${d.proposal ? ' (his suggestion)' : ''}</h3><p class="note">Reds come first in this order. Ambers stay locked until every red is mastered.</p>${editor}</div>
     <div class="group"><h3>Settings</h3>
@@ -245,7 +252,7 @@ function renderParent(){
   const kid = S.childById(P.child), subs = S.subjectsFor(kid.id);
   const tk = S.todayKey(), wk = S.rangeTotals(kid.id, S.addDays(tk, -6), tk), td = S.dailyTotals(kid.id), all = S.rangeTotals(kid.id, '0000-00-00', '9999-12-31');
   const combined = {};
-  subs.forEach(e => Object.entries(S.store(e).log.days).forEach(([k, d]) => { const c = combined[k] = combined[k] || {s: 0, q: 0, c: 0, h: 0}; c.s += d.s; c.q += d.q; c.c += d.c; c.h += d.h; }));
+  subs.forEach(e => Object.entries(S.store(e).log.days).forEach(([k, d]) => { const c = combined[k] = combined[k] || {s: 0, q: 0, c: 0, h: 0, w: 0, wm: 0, wo: 0}; c.s += d.s; c.q += d.q; c.c += d.c; c.h += d.h; c.w += d.w || 0; c.wm += d.wm || 0; c.wo += d.wo || 0; }));
   app.innerHTML = `<button class="back" id="back">← Who's studying</button>
   <header class="top"><span class="eyebrow">Parent view</span><h1>Activity</h1></header>
   <div class="ptabs" role="tablist">${kids.map(c => `<button class="tab" role="tab" data-pc="${c.id}" aria-selected="${c.id === kid.id}">${esc(c.name)}</button>`).join('')}</div>
@@ -254,6 +261,7 @@ function renderParent(){
     <div class="sumbox"><span class="eyebrow">Last 7 days</span><span class="big">${S.fmtDur(wk.s)}</span><span>${wk.q} questions · ${S.pct(wk.c, wk.q)} right · ${wk.h} answer${wk.h === 1 ? "" : "s"} shown</span></div>
   </div>
   <p class="note">All subjects since ${S.fmtDateY(S.childSince(kid.id))}: ${S.fmtDur(all.s)}, ${all.q} questions, ${S.pct(all.c, all.q)} right.</p>
+  ${S.plan ? S.plan.parentHTML(kid.id) : ''}
   ${S.game ? gameBlock(kid) : ''}
   ${subs.length > 1 ? `<section class="group"><h2>Day by day, all subjects</h2><div class="tblwrap"><table>${dayHead}<tbody>${dayRows(combined)}</tbody></table></div></section>` : ''}
   ${subs.map(subjectBlock).join('')}` : `<div class="empty"><p>No subjects set up for ${esc(kid.name)} yet.</p></div>`}
@@ -265,7 +273,9 @@ function renderParent(){
     <li>Progress is per device and per browser. A session on the phone won't show on the laptop.</li>
     <li><b>XP</b> only comes from correct work: 10 for a right answer, 5 with a hint, nothing for Show me how, and just 2 on topics he's already mastered. 50 for mastering a topic, 75 for re-mastering one a test flagged. Question of the day is double. Boss rounds give 15 a question, for the first 2 rounds a day in each subject.</li>
     <li><b>Streak</b> days need at least ${S.game ? S.game.STREAK_Q : 10} questions at ${S.game ? S.game.STREAK_PCT : 60}% or better, across all his subjects. One missed day a week is forgiven.</li>
-    <li>XP is logged per day, ready for PlayStation time once you set the rule.</li>
+    <li><b>Written</b> shows exam-style written answers he marked himself: how many, then marks claimed out of marks available. They never count towards mastery, streaks or % right, and earn a flat 3 XP each. His actual answers are listed under each subject, so you can spot-check his marking.</li>
+    <li><b>Study plan</b>. Football nights are 45 minutes, other weeknights 90. "Training cancelled" turns a football night into 90, and every press is listed. Friday is off once every Monday to Thursday minute is done, counting time on each night's planned subject. Exam-week Fridays are always on.</li>
+    <li><b>Self-reported</b> time comes from the focus timer, used for subjects not in the app yet. It pauses if the page is hidden, asks "Still working?" every 15 minutes, and takes 2 minutes back if he doesn't answer. It can't prove he was studying, so it's always shown apart from tracked time, never earns XP, and every session needs a note on what he covered.</li>
     <li>The PIN keeps casual eyes out. It isn't bank-grade security, and someone determined with browser tools could edit the stored data.</li></ul></section>
   <div class="foot"><button class="ghost" id="lock">Lock</button><button class="ghost" id="cpin">Change PIN</button>${verFoot}</div>`;
 

@@ -5,13 +5,14 @@
    - Show me how earns nothing. A hint halves the XP.
    - Practising an already mastered topic earns very little, so easy wins can't be farmed.
    - Boss rounds only earn XP for the first 2 rounds a day in each subject.
-   XP is stored per child per day, so it can be turned into PlayStation time later.
+   - Self-marked written answers earn a flat 3 XP, whatever marks he gives himself.
+   XP is stored per child per day. Only tracked work earns XP. The self-reported focus timer never does.
    Storage: studyapp:<child>:all:game (one per child, across all his subjects). */
 (function(){
 'use strict';
 const S = window.Study, el = S.el, esc = S.esc;
 
-const XP = {correct:10, hinted:5, practiseMastered:2, qotd:20, qotdHint:10, boss:15, master:50, remaster:75, bossBest:50};
+const XP = {correct:10, hinted:5, practiseMastered:2, qotd:20, qotdHint:10, boss:15, master:50, remaster:75, bossBest:50, written:3};
 const BOSS_LEN = 8, BOSS_XP_ROUNDS = 2, STREAK_Q = 10, STREAK_PCT = 60, CLEAN_RUN = 10;
 const BADGES = [
   {id:'first',    name:'First steps',   desc:'Master your first topic'},
@@ -103,6 +104,11 @@ function onAnswer(entry, topicId, o){
   if (o.ok && !o.hinted && !o.reveal){ g.run++; if (g.run >= CLEAN_RUN){ g.run = 0; got.push(badge(child, 'clean')); } }
   else g.run = 0;
   return finish(child, before, xp, got);
+}
+/* Self-marked written answer: small flat XP for a real attempt, nothing for "I don't know". */
+function onWritten(entry, gaveUp){
+  const child = entry.child, before = levelOf(G(child).xp).level;
+  return finish(child, before, gaveUp ? 0 : XP.written, []);
 }
 function onTest(entry, rec){
   const child = entry.child, before = levelOf(G(child).xp).level, got = [];
@@ -292,6 +298,6 @@ function renderDone(entry){
   el('back2').onclick = () => { B.state = 'intro'; S.go('subject', {entry}); };
 }
 
-S.game = {XP, BOSS_LEN, BOSS_XP_ROUNDS, STREAK_Q, STREAK_PCT, CLEAN_RUN, BADGES, G, save, reset, levelOf, streak, onAnswer, onTest, onBoss, qotd, summary,
+S.game = {XP, BOSS_LEN, BOSS_XP_ROUNDS, STREAK_Q, STREAK_PCT, CLEAN_RUN, BADGES, G, save, reset, levelOf, streak, onAnswer, onWritten, onTest, onBoss, qotd, summary,
   bannersHTML, xpTag, badgesHTML, panelHTML, bossCardHTML, fmtClock, weekKey};
 })();

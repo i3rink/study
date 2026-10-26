@@ -264,6 +264,10 @@ function genExp(){
   const w=[];
   if(t===3)w.push(`Write it out twice: ${M(brk(A)+brk(A))}`);
   w.push(`${prods.length} handshakes:`+'<br>'+prods.map(p=>M(`${wrapT(...p[0])} × ${wrapT(...p[1])} = ${termS(p[2][0],p[2][1],true)}`)).join('<br>'));
+  const byP={};prods.forEach(p=>{(byP[p[2][1]]=byP[p[2][1]]||[]).push(p[2][0]);});
+  Object.keys(byP).map(Number).sort((a,b)=>b-a).filter(pw=>byP[pw].length>1).forEach(pw=>{
+    const cs=byP[pw],sum=cs.reduce((a,b)=>a+b,0),lab=pw===0?'Numbers':M(v('x')+(pw>1?sup(pw):''))+' terms';
+    w.push(`${lab}: ${M(cs.map((c,i)=>termS(c,pw,i===0)).join(''))} = ${M(sum===0?'0':termS(sum,pw,true))}, so that box is ${n_(sum)}`);});
   w.push(`Collect like terms: ${M(poly(co))}`);
   return {kind:'fields',fields,template:parts.join(' + '),calc:false,
     prompt:`Expand and simplify ${M(shown)}`,

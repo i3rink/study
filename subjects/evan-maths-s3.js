@@ -509,6 +509,24 @@ function genPyth(){
     working:[`Floor diagonal${sup(2)} = ${l}${sup(2)} + ${w}${sup(2)} = ${fl}`,`AB${sup(2)} = floor diagonal${sup(2)} + ${h}${sup(2)} = ${fl} + ${h*h} = ${fl+h*h}`,`AB = ${M(sq(fl+h*h))} = ${fmt(rnd(d,1),1)} cm`],answerText:`${fmt(rnd(d,1),1)} cm`};
 }
 
+/* ---------- 3.14 or the π button ----------
+   Lots of pupils use 3.14 instead of the π button, which can change the last digit.
+   P is the value of π the circle and volume questions use. withPi314 builds each question
+   twice from the same random numbers, once with π and once with 3.14, and accepts either answer. */
+let P=Math.PI;
+function withPi314(gen){
+  return ()=>{
+    const orig=Math.random,seq=[];let q,q2,i=0;
+    try{Math.random=()=>{const r=orig();seq.push(r);return r;};P=Math.PI;q=gen();}finally{Math.random=orig;}
+    try{Math.random=()=>i<seq.length?seq[i++]:orig();P=3.14;q2=gen();}finally{Math.random=orig;P=Math.PI;}
+    if(q.kind==='num'&&q2.kind==='num'&&Math.abs(q2.answer-q.answer)>(q.tol||0)+1e-9){
+      q.alt=[{answer:q2.answer,tol:q2.tol,note:`You used 3.14 for ${PI}, so your answer is slightly different. That still counts. The ${PI} button gives ${q.answerText}, which is more accurate.`}];
+      q.answerText+=` (or ${q2.answerText} using 3.14)`;
+    }
+    return q;
+  };
+}
+
 /* ======================================================================
    8. The Circle 1
    ====================================================================== */
@@ -517,7 +535,7 @@ function genCirc(){
   const t=pick([1,1,2,2,3,4,4,5,5]),u=pick(['cm','m','mm']);
   if(t===1||t===2){
     const useD=Math.random()<.5,val=pick([R(3,40),R(25,250)/10]),r=useD?val/2:val,area=t===2;
-    const x=area?Math.PI*r*r:2*Math.PI*r;
+    const x=area?P*r*r:2*P*r;
     return {kind:'num',...sfAns(x,3),calc:true,post:area?u+'²':u,
       prompt:`A circle has a ${useD?'diameter':'radius'} of ${fmt(val)} ${u}. Calculate its ${area?'area':'circumference'}. Give your answer to 3 significant figures.`,
       diagram:circleSVG(useD?'d':'r',`${fmt(val)} ${u}`),
@@ -528,24 +546,24 @@ function genCirc(){
   }
   if(t===3){
     const fromA=Math.random()<.5,want=pick(['radius','diameter']),given=fromA?R(50,900)/10:R(10,150);
-    const r=fromA?Math.sqrt(given/Math.PI):given/(2*Math.PI),x=want==='radius'?r:2*r;
+    const r=fromA?Math.sqrt(given/P):given/(2*P),x=want==='radius'?r:2*r;
     return {kind:'num',...sfAns(x,3),calc:true,post:u,
       prompt:`A circle has ${fromA?`an area of ${fmt(given)} ${u}²`:`a circumference of ${fmt(given)} ${u}`}. Calculate its ${want}. Give your answer to 3 significant figures.`,
       hint:fromA?`Area = ${PI}r². Working backwards: divide by ${PI}, then square root to get the radius.`:`Circumference = ${PI}d. Working backwards: divide by ${PI} to get the diameter.`,
-      working:fromA?[`r${sup(2)} = ${fmt(given)} ÷ ${PI} = ${fmt(given/Math.PI,4)}`,`r = ${M(sq(fmt(given/Math.PI,4)))} = ${fmt(r,4)}`,...(want==='diameter'?[`d = 2 × ${fmt(r,4)} = ${fmt(2*r,4)}`]:[]),`To 3 significant figures: ${sf3(x)} ${u}`]
+      working:fromA?[`r${sup(2)} = ${fmt(given)} ÷ ${PI} = ${fmt(given/P,4)}`,`r = ${M(sq(fmt(given/P,4)))} = ${fmt(r,4)}`,...(want==='diameter'?[`d = 2 × ${fmt(r,4)} = ${fmt(2*r,4)}`]:[]),`To 3 significant figures: ${sf3(x)} ${u}`]
         :[`d = ${fmt(given)} ÷ ${PI} = ${fmt(2*r,4)}`,...(want==='radius'?[`r = ${fmt(2*r,4)} ÷ 2 = ${fmt(r,4)}`]:[]),`To 3 significant figures: ${sf3(x)} ${u}`],
       answerText:`${sf3(x)} ${u}`};
   }
   const r=R(4,25),deg=pick([30,40,45,60,72,80,90,100,110,120,135,140,150,210,240,270,300]);
   if(t===4){
-    const x=deg/360*Math.PI*2*r;
+    const x=deg/360*P*2*r;
     return {kind:'num',...dpAns(x,2),tol:.006,calc:true,post:u,
       prompt:`Calculate the arc length of this sector. The radius is ${r} ${u}. Give your answer to 2 decimal places.`,
       diagram:sectorSVG(`${r} ${u}`,deg),
       hint:`The arc is ${deg}/360 of the whole circumference. Circumference = ${PI} × diameter.`,
       working:[`Fraction of the circle: ${deg} ÷ 360`,`Arc = ${deg} ÷ 360 × ${PI} × ${2*r}`,`= ${fmt(x,4)}...`,`To 2 decimal places: ${fmt(rnd(x,2),2)} ${u}`],answerText:`${fmt(rnd(x,2),2)} ${u}`};
   }
-  const x=deg/360*Math.PI*r*r;
+  const x=deg/360*P*r*r;
   return {kind:'num',...sfAns(x,3),calc:true,post:u+'²',
     prompt:`Calculate the area of this sector. The radius is ${r} ${u}. Give your answer to 3 significant figures.`,
     diagram:sectorSVG(`${r} ${u}`,deg),
@@ -622,11 +640,11 @@ function genVol(){
   const rOrD=()=>{const useD=Math.random()<.5,val=R(2,30);return {useD,val,r:useD?val/2:val,txt:`${useD?'diameter':'radius'} ${val} cm`};};
   const vq=(x,prompt,hint,working)=>({kind:'num',...sfAns(x,3),calc:true,post:'cm³',prompt:prompt+' Give your answer to 3 significant figures.',hint,working:[...working,`= ${fmt(x,3)}...`,`To 3 significant figures: ${sf3(x)} cm³`],answerText:sf3(x)+' cm³'});
   const halve=o=>o.useD?[`Radius = ${o.val} ÷ 2 = ${fmt(o.r)} cm`]:[];
-  if(t===1){const o=rOrD(),h=R(3,40),x=Math.PI*o.r*o.r*h;
+  if(t===1){const o=rOrD(),h=R(3,40),x=P*o.r*o.r*h;
     return vq(x,`A cylinder has ${o.txt} and height ${h} cm. Calculate its volume.`,`Cylinder: ${PI} × r² × h.${o.useD?' Halve the diameter first.':''}`,[...halve(o),`V = ${PI} × ${fmt(o.r)}${sup(2)} × ${h}`]);}
-  if(t===2){const o=rOrD(),h=R(3,40),x=Math.PI*o.r*o.r*h/3;
+  if(t===2){const o=rOrD(),h=R(3,40),x=P*o.r*o.r*h/3;
     return vq(x,`A cone has ${o.txt} and height ${h} cm. Calculate its volume.`,`Cone: ${PI} × r² × h ÷ 3. It's a third of the cylinder.`,[...halve(o),`V = ${PI} × ${fmt(o.r)}${sup(2)} × ${h} ÷ 3`]);}
-  if(t===3){const o=rOrD(),x=4/3*Math.PI*Math.pow(o.r,3);
+  if(t===3){const o=rOrD(),x=4/3*P*Math.pow(o.r,3);
     return vq(x,`A sphere has ${o.txt}. Calculate its volume.`,`Sphere: 4 × ${PI} × r³ ÷ 3.`,[...halve(o),`V = 4 × ${PI} × ${fmt(o.r)}${sup(3)} ÷ 3`]);}
   if(t===4){const l=R(4,30),w=Math.random()<.5?l:R(4,30),h=R(4,40),x=l*w*h/3;
     return vq(x,`A pyramid has a ${l===w?'square':'rectangular'} base measuring ${l} cm by ${w} cm. Its height is ${h} cm. Calculate its volume.`,`Pyramid: area of the base × height ÷ 3.`,[`Base area = ${l} × ${w} = ${l*w} cm²`,`V = ${l*w} × ${h} ÷ 3`]);}
@@ -634,25 +652,25 @@ function genVol(){
     return vq(x,`A triangular prism has a triangular end with base ${b} cm and height ${h} cm. The prism is ${L} cm long. Calculate its volume.`,`Prism: area of the end × length. The end is a triangle, so ½ × base × height.`,[`End area = ½ × ${b} × ${h} = ${fmt(b*h/2)} cm²`,`V = ${fmt(b*h/2)} × ${L}`]);}
   if(t===6){
     const k=pick([1,2,3]);
-    if(k===1){const r=R(3,12),V=R(200,3000),h=3*V/(Math.PI*r*r);
+    if(k===1){const r=R(3,12),V=R(200,3000),h=3*V/(P*r*r);
       return {kind:'num',...dpAns(h,1),tol:.06,calc:true,post:'cm',prompt:`A cone has radius ${r} cm and volume ${fmt(V)} cm³. Calculate its height. Give your answer to 1 decimal place.`,
         hint:`Put what you know into V = ${PI} × r² × h ÷ 3, then work backwards to find h.`,
         working:[`${fmt(V)} = ${PI} × ${r}${sup(2)} × h ÷ 3`,`Multiply by 3: ${fmt(3*V)} = ${PI} × ${r*r} × h`,`h = ${fmt(3*V)} ÷ (${PI} × ${r*r}) = ${fmt(h,3)}...`,`To 1 decimal place: ${fmt(rnd(h,1),1)} cm`],answerText:fmt(rnd(h,1),1)+' cm'};}
-    if(k===2){const r=R(5,15),Lt=R(10,90)/10,V=Lt*1000,h=V/(Math.PI*r*r);
+    if(k===2){const r=R(5,15),Lt=R(10,90)/10,V=Lt*1000,h=V/(P*r*r);
       return {kind:'num',...dpAns(h,1),tol:.06,calc:true,post:'cm',prompt:`A cylinder has radius ${r} cm and holds ${fmt(Lt)} litres. Calculate its height. Give your answer to 1 decimal place.`,
         hint:`1 litre = 1000 cm³, so change the litres to cm³ first. Then V = ${PI} × r² × h.`,
         working:[`${fmt(Lt)} litres = ${fmt(V)} cm³`,`${fmt(V)} = ${PI} × ${r}${sup(2)} × h`,`h = ${fmt(V)} ÷ (${PI} × ${r*r}) = ${fmt(h,3)}...`,`To 1 decimal place: ${fmt(rnd(h,1),1)} cm`],answerText:fmt(rnd(h,1),1)+' cm'};}
-    const Lt=R(5,60)/10,V=Lt*1000,r=Math.cbrt(3*V/(4*Math.PI));
+    const Lt=R(5,60)/10,V=Lt*1000,r=Math.cbrt(3*V/(4*P));
     return {kind:'num',...dpAns(r,1),tol:.06,calc:true,post:'cm',prompt:`A sphere holds ${fmt(Lt)} litres. Calculate its radius. Give your answer to 1 decimal place.`,
       hint:`Change litres to cm³ (× 1000). Then V = 4 × ${PI} × r³ ÷ 3, so r³ = 3V ÷ (4${PI}). Finish with a cube root.`,
-      working:[`${fmt(Lt)} litres = ${fmt(V)} cm³`,`r${sup(3)} = 3 × ${fmt(V)} ÷ (4 × ${PI}) = ${fmt(3*V/(4*Math.PI),3)}`,`r = cube root = ${fmt(r,3)}...`,`To 1 decimal place: ${fmt(rnd(r,1),1)} cm`],answerText:fmt(rnd(r,1),1)+' cm'};
+      working:[`${fmt(Lt)} litres = ${fmt(V)} cm³`,`r${sup(3)} = 3 × ${fmt(V)} ÷ (4 × ${PI}) = ${fmt(3*V/(4*P),3)}`,`r = cube root = ${fmt(r,3)}...`,`To 1 decimal place: ${fmt(rnd(r,1),1)} cm`],answerText:fmt(rnd(r,1),1)+' cm'};
   }
   const k=pick([1,2,3]),r=R(3,15);
-  if(k===1){const h1=R(5,30),h2=R(4,20),a=Math.PI*r*r*h1,b=Math.PI*r*r*h2/3,x=a+b;
+  if(k===1){const h1=R(5,30),h2=R(4,20),a=P*r*r*h1,b=P*r*r*h2/3,x=a+b;
     return vq(x,`A solid is made from a cylinder with a cone on top. Both have radius ${r} cm. The cylinder is ${h1} cm tall and the cone is ${h2} cm tall. Calculate the total volume.`,`Work out the cylinder and the cone separately, then add.`,[`Cylinder: ${PI} × ${r}${sup(2)} × ${h1} = ${fmt(a,2)}`,`Cone: ${PI} × ${r}${sup(2)} × ${h2} ÷ 3 = ${fmt(b,2)}`,`Total = ${fmt(a,2)} + ${fmt(b,2)}`]);}
-  if(k===2){const h=R(6,25),a=Math.PI*r*r*h/3,b=2/3*Math.PI*Math.pow(r,3),x=a+b;
+  if(k===2){const h=R(6,25),a=P*r*r*h/3,b=2/3*P*Math.pow(r,3),x=a+b;
     return vq(x,`An ice cream is a cone of height ${h} cm with a hemisphere of ice cream on top. Both have radius ${r} cm. Calculate the total volume.`,`A hemisphere is half a sphere. Work out the cone and the hemisphere, then add.`,[`Cone: ${PI} × ${r}${sup(2)} × ${h} ÷ 3 = ${fmt(a,2)}`,`Hemisphere: half of 4 × ${PI} × ${r}${sup(3)} ÷ 3 = ${fmt(b,2)}`,`Total = ${fmt(a,2)} + ${fmt(b,2)}`]);}
-  const L=R(8,40),a=Math.PI*r*r*L,b=4/3*Math.PI*Math.pow(r,3),x=a+b;
+  const L=R(8,40),a=P*r*r*L,b=4/3*P*Math.pow(r,3),x=a+b;
   return vq(x,`A capsule is a cylinder ${L} cm long with a hemisphere on each end. The radius is ${r} cm. Calculate the total volume.`,`Two hemispheres make one whole sphere. Add that to the cylinder.`,[`Cylinder: ${PI} × ${r}${sup(2)} × ${L} = ${fmt(a,2)}`,`Two hemispheres = one sphere: 4 × ${PI} × ${r}${sup(3)} ÷ 3 = ${fmt(b,2)}`,`Total = ${fmt(a,2)} + ${fmt(b,2)}`]);
 }
 
@@ -711,6 +729,14 @@ function genFX(){
 const nz=(a,b)=>{let n;do{n=R(a,b);}while(n===0);return n;};
 const bx=(a,b)=>`(${a===1?'':a===-1?MINUS:n_(a)}${v('x')}${b<0?' '+MINUS+' '+Math.abs(b):' + '+b})`;
 const term=(k,inner)=>`${k<0?' '+MINUS+' ':' + '}${Math.abs(k)===1?'':Math.abs(k)}${inner}`;
+/* One working line for each power with more than one term to collect,
+   e.g. "x² terms: 8x² − 9x² = −x², so that box is −1". */
+function collect(terms){
+  const by={};terms.forEach(([c,p])=>{(by[p]=by[p]||[]).push(c);});
+  return Object.keys(by).map(Number).sort((a,b)=>b-a).filter(p=>by[p].length>1).map(p=>{
+    const cs=by[p],sum=cs.reduce((a,b)=>a+b,0),lab=p===0?'Numbers':M(v('x')+(p>1?sup(p):''))+' terms';
+    return `${lab}: ${M(poly(cs,cs.map(()=>p))||'0')} = ${M(poly([sum],[p])||'0')}, so that box is ${n_(sum)}`;});
+}
 function polyQ(coefs,powers,prompt,hint,working){
   return {kind:'fields',fields:coefs.map(c=>({answer:c,tol:0})),template:polyTemplate(powers),calc:false,
     note:`Fill in every box. ${NOTE_NEG} Type 0 if a term isn't there, and 1 if there's no number in front.`,
@@ -730,7 +756,7 @@ function genAlg(){
     if(co[0]===0)return genAlg();
     return polyQ(co,[2,1,0],`Expand and simplify ${M(`${p}${v('x')}${bx(q,r)}${term(-s,`(${v('x')}${sup(2)}${sgn(u)})`)}`)}`,
       `${p}${v('x')} × ${q===1?'':q}${v('x')} gives an ${v('x')}${sup(2)} term. Then expand the second bracket, watching the sign.`,
-      [`${p}${v('x')} × ${bx(q,r)} = ${M(poly([p*q,p*r],[2,1]))}`,`${n_(-s)} × (${v('x')}${sup(2)}${sgn(u)}) = ${M(poly([-s,-s*u],[2,0]))}`,`Collect like terms`]);
+      [`${p}${v('x')} × ${bx(q,r)} = ${M(poly([p*q,p*r],[2,1]))}`,`${n_(-s)} × (${v('x')}${sup(2)}${sgn(u)}) = ${M(poly([-s,-s*u],[2,0]))}`,...collect([[p*q,2],[p*r,1],[-s,2],[-s*u,0]])]);
   }
   if(t===3){
     const a=pick([1,1,1,2,3,5]),c=pick([1,1,2,3,4]),b=nz(-9,9),d=nz(-9,9);
@@ -754,12 +780,12 @@ function genAlg(){
     if(co[0]===0)return genAlg();
     return polyQ(co,[2,1,0],`Expand and simplify ${M(bx(1,a)+bx(1,b)+term(s,`(${v('x')}${sup(2)}${sgn(c)})`))}`,
       `Do each part separately, then collect. The ${n_(s)} multiplies both terms in its bracket.`,
-      [`${M(bx(1,a)+bx(1,b))} = ${M(poly([1,a+b,a*b],[2,1,0]))}`,`${n_(s)}(${v('x')}${sup(2)}${sgn(c)}) = ${M(poly([s,s*c],[2,0]))}`,`Collect like terms`]);
+      [`${M(bx(1,a)+bx(1,b))} = ${M(poly([1,a+b,a*b],[2,1,0]))}`,`${n_(s)}(${v('x')}${sup(2)}${sgn(c)}) = ${M(poly([s,s*c],[2,0]))}`,...collect([[1,2],[a+b,1],[a*b,0],[s,2],[s*c,0]])]);
   }
   const a=pick([1,1,2,5]),b=nz(-6,6),c=nz(-7,7),d=nz(-6,6);
   return polyQ([a,a*c+b,a*d+b*c,b*d],[3,2,1,0],`Expand and simplify ${M(`${bx(a,b)}(${poly([1,c,d],[2,1,0])})`)}`,
     `2 terms × 3 terms = 6 multiplications. Do the ${a===1?'':a}${v('x')} first, then the ${n_(b)}. Then collect.`,
-    [`${a===1?'':a}${v('x')} × each: ${M(poly([a,a*c,a*d],[3,2,1]))}`,`${n_(b)} × each: ${M(poly([b,b*c,b*d],[2,1,0]))}`,`Collect like terms`]);
+    [`${a===1?'':a}${v('x')} × each: ${M(poly([a,a*c,a*d],[3,2,1]))}`,`${n_(b)} × each: ${M(poly([b,b*c,b*d],[2,1,0]))}`,...collect([[a,3],[a*c,2],[a*d,1],[b,2],[b*c,1],[b*d,0]])]);
 }
 
 /* ======================================================================
@@ -815,7 +841,7 @@ const TOPICS=[
    ex:{q:`The short sides are 6 cm and 8 cm. Find the hypotenuse.`,lines:[`6${sup(2)} + 8${sup(2)} = 36 + 64 = 100`,`${M(sq(100))} = 10`,`Hypotenuse = 10 cm`]},
    traps:[`Adding when you should take away. If the hypotenuse is given, take away.`,`Forgetting the square root at the end.`,`In 3D, using a side of the floor instead of the floor diagonal.`],
    exam:`National 5 Paper 2. Often hidden inside a bigger problem. 3 or 4 marks.`}},
- {id:'circ',level:'red',name:'The Circle 1',blurb:'Circumference, area, arcs and sectors',gen:genCirc,learn:{
+ {id:'circ',level:'red',name:'The Circle 1',blurb:'Circumference, area, arcs and sectors',gen:withPi314(genCirc),learn:{
    analogy:`A pizza. The crust is the circumference. The whole pizza is the area. A slice is a sector, and its bit of crust is the arc.`,
    key:`Circumference = ${PI} × diameter. Area = ${PI} × radius${sup(2)}. An arc or sector is a fraction of the circle: angle ÷ 360.`,
    steps:[`Check whether you've got the radius or the diameter. The diameter is twice the radius.`,`Circumference: ${PI} × d.`,`Area: ${PI} × r × r.`,`Arc length: angle ÷ 360 × ${PI} × d.`,`Sector area: angle ÷ 360 × ${PI} × r${sup(2)}.`,`Working backwards from the area: divide by ${PI}, then square root to get r.`],
@@ -829,7 +855,7 @@ const TOPICS=[
    ex:{q:`Find the equation of the line through (1, 5) and (3, 9).`,lines:[`${v('m')} = (9 ${MINUS} 5) ÷ (3 ${MINUS} 1) = 2`,`5 = 2 × 1 + ${v('c')}, so ${v('c')} = 3`,M(v('y')+' = 2'+v('x')+' + 3')]},
    traps:[`Doing across ÷ up instead of up ÷ across.`,`Taking the points in a different order on the top and the bottom.`,`Reading off ${v('m')} and ${v('c')} before ${v('y')} is on its own.`],
    exam:`National 5 Paper 1 (no calculator). Usually 3 marks.`}},
- {id:'vol',level:'red',name:'Volume',blurb:'Cylinders, cones, spheres, pyramids and prisms',gen:genVol,learn:{
+ {id:'vol',level:'red',name:'Volume',blurb:'Cylinders, cones, spheres, pyramids and prisms',gen:withPi314(genVol),learn:{
    analogy:`Volume is how many sugar cubes would fill a shape. Prisms and cylinders are stacks of the same slice, like a pile of coins.`,
    key:`Prism or cylinder: area of the end × length. Cone or pyramid: a third of that. Sphere: 4 × ${PI} × r${sup(3)} ÷ 3.`,
    steps:[`Get the radius. Halve the diameter if that's what you're given.`,`Pick the formula for the shape.`,`Cylinder: ${PI} × r${sup(2)} × h. Cone: ${PI} × r${sup(2)} × h ÷ 3.`,`Sphere: 4 × ${PI} × r${sup(3)} ÷ 3. A hemisphere is half of that.`,`Shapes made of two solids: work out each one, then add.`,`1 litre = 1000 cm³.`],
@@ -882,6 +908,8 @@ const NUT={
       why:`It's like a café with 2 breads and 3 fillings. Every bread meets every filling, giving 6 sandwiches. Most algebra starts here.`}
 };
 TOPICS.forEach(t=>{t.nut=NUT[t.id];});
+const PI_TIP=`Can't find the ${PI} button? On most Casio school calculators it's SHIFT then ×10ˣ. If you use 3.14 instead, the app still accepts your answer, but the ${PI} button is more accurate.`;
+['circ','vol'].forEach(id=>{const t=TOPICS.find(x=>x.id===id);if(t&&t.learn){(t.learn.traps=t.learn.traps||[]).push(PI_TIP);}});
 
 Study.registerSubject('evan-maths-s3',{
   title:'Maths',

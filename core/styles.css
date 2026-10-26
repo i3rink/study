@@ -289,3 +289,53 @@ ol.review>li.r-ok{border-left-color:var(--green)} ol.review>li.r-bad{border-left
 ol.review>li.r-ok summary{color:var(--green)} ol.review>li.r-bad summary{color:var(--redpen)}
 ol.review summary{cursor:pointer; font-weight:700}
 ol.review ol{padding-left:1.4em}
+
+/* ---------- v1.2.0: study plan and focus timer ---------- */
+.plan{background:var(--sheet); border:2px solid var(--ink); border-radius:6px; padding:16px 18px; display:flex; flex-direction:column; gap:16px}
+.planhead{display:flex; flex-direction:column; gap:4px}
+.planhead .cd{font-size:1rem}
+.tonight{display:flex; flex-direction:column; gap:10px}
+.tonight h2{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+ol.pblocks{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:10px}
+.pblk{border:1px solid var(--line); border-radius:4px; padding:12px 14px; display:flex; flex-direction:column; gap:8px; background:var(--paper)}
+.pbtop{display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; align-items:baseline}
+.pbtop span{color:var(--ink-2); font-variant-numeric:tabular-nums}
+.pbbot{display:flex; align-items:center; gap:10px; flex-wrap:wrap}
+.pbbot small{color:var(--ink-2)}
+ol.wkstrip{list-style:none; margin:0; padding:0; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:6px}
+.wk{border:1.5px solid var(--line); border-radius:4px; padding:6px 4px; display:flex; flex-direction:column; align-items:center; gap:2px; font-size:.85rem; font-variant-numeric:tabular-nums; color:var(--ink-2); background:var(--paper)}
+.wk b{color:var(--ink)}
+.wk i{font-style:normal; font-size:.7rem; font-weight:700; color:var(--redpen); text-transform:uppercase; letter-spacing:.05em}
+.wk.today{border-color:var(--blue); box-shadow:0 0 0 1px var(--blue)}
+.wk.hit,.wk.off{background:var(--green-soft); border-color:var(--green); color:var(--green)}
+.wk.short{background:var(--amber-soft); border-color:var(--amber); color:var(--amber)}
+.wk.none{opacity:.5}
+.focus{background:var(--sheet); border:1px solid var(--line); border-radius:6px; padding:22px 18px; display:flex; flex-direction:column; gap:14px; align-items:stretch}
+.fclock{font-family:var(--f-display); font-weight:800; font-size:clamp(3.4rem,16vw,5.5rem); line-height:1; text-align:center; font-variant-numeric:tabular-nums; letter-spacing:-.02em}
+.fbar{height:10px}
+.focus .note{text-align:center}
+.focus .actions{justify-content:center}
+.btn.big{padding:14px 32px; font-size:1.15rem}
+.checkin{display:flex; flex-direction:column; gap:8px; align-items:center; text-align:center; background:var(--amber-soft); border:2px solid var(--amber); border-radius:6px; padding:16px}
+.checkin b{font-family:var(--f-display); font-size:1.4rem}
+.fld.wide2{max-width:100%}
+td.wrapcell{white-space:normal; min-width:180px}
+tr.today td{background:var(--blue-soft)}
+tr.past td{color:var(--ink-2)}
+.pplan{border-top:3px solid var(--ink); padding-top:18px}
+.pplan h3{margin-top:6px}
+td small{color:var(--ink-2)}
+
+/* ---------- v1.2.0: text answers, written answers, sign check ---------- */
+fieldset.mc.plain{grid-template-columns:1fr}
+.opt .ot{white-space:normal; line-height:1.4}
+.slip{background:var(--amber-soft); color:var(--amber); border-radius:4px; padding:8px 12px; font-weight:700; font-size:.92rem}
+ul.mpts{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:6px}
+ul.mpts li{border:1px solid var(--line); border-radius:4px; padding:8px 10px; background:var(--paper)}
+ul.mpts label{display:flex; gap:10px; align-items:flex-start; cursor:pointer}
+ul.mpts input{width:18px; height:18px; margin-top:2px; flex:none; accent-color:var(--green)}
+ul.mpts label:has(input:checked){color:var(--green); font-weight:700}
+.yours,.model{border-radius:4px; padding:10px 14px; display:flex; flex-direction:column; gap:4px}
+.yours{background:var(--paper); border:1px dashed var(--line)}
+.model{background:var(--green-soft)}
+.prac .fld.area{min-height:120px}
