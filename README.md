@@ -4,7 +4,7 @@ One study app for Ben and Evan. Opens with "Who's studying today?", shows each b
 
 Live at `https://i3rink.github.io/study/` once GitHub Pages is on.
 
-Version: **1.2.0** (set in `core/engine.js` as `APP_VERSION`, shown in the footer, and used in the commit message).
+Version: **1.3.0** (set in `core/engine.js` as `APP_VERSION`, shown in the footer, and used in the commit message).
 
 ## Files
 
@@ -21,6 +21,7 @@ Version: **1.2.0** (set in `core/engine.js` as `APP_VERSION`, shown in the foote
 | `subjects/ben-maths-n5.js` | Ben, SQA National 5 Mathematics content |
 | `subjects/evan-maths-s3.js` | Evan, S3 Mathematics matched to his revision booklet (National 5 standard), 12 topics in booklet order |
 | `subjects/evan-business-s3.js` | Evan, S3 Business, Assessment Piece 2 revision list, 10 topics in list order |
+| `subjects/evan-biology-s3.js` | Evan, S3 Biology, Body Systems summary sheet, 10 topics in sheet order. Glucagon taught as Advanced (National 5) |
 | `plans/ben-prelims-2026.js` | Ben's December 2026 prelim plan: exam dates and what to study each weeknight |
 
 ## Adding a subject
@@ -31,6 +32,8 @@ Version: **1.2.0** (set in `core/engine.js` as `APP_VERSION`, shown in the foote
 3. Nothing else changes.
 
 Each topic needs `id`, `name`, `blurb`, `level` ('red' or 'amber', the parent's default order), `nut` (`what` and `why`, 50 words max between them), `learn` (analogy, key, steps, ex, traps, exam) and `gen()` returning a question.
+
+Questions can carry a `diagram` (inline SVG, using the theme colour variables so it works in dark mode).
 
 Question kinds the core supports: `mc` (add `plain: true` for ordinary text options), `num` (add `alt` for other answers that also count, like using 3.14 for π), `fields`.
 

@@ -13,7 +13,8 @@ window.STUDY_REGISTRY = {
   subjects: [
     { child: 'ben',  subject: 'maths-n5', file: 'subjects/ben-maths-n5.js',  name: 'Maths', level: 'National 5' },
     { child: 'evan', subject: 'maths-s3', file: 'subjects/evan-maths-s3.js', name: 'Maths', level: 'S3' },
-    { child: 'evan', subject: 'business-s3', file: 'subjects/evan-business-s3.js', name: 'Business', level: 'S3' }
+    { child: 'evan', subject: 'business-s3', file: 'subjects/evan-business-s3.js', name: 'Business', level: 'S3' },
+    { child: 'evan', subject: 'biology-s3', file: 'subjects/evan-biology-s3.js', name: 'Biology', level: 'S3' }
   ],
   plans: [
     { child: 'ben', file: 'plans/ben-prelims-2026.js' }
